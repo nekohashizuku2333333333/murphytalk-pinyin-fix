@@ -55,7 +55,7 @@ static PinyinInitial get_initial_from_letter(char c)
 
 PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
-	 m_initial_lookup(false),
+	 m_initial_lookup(false),m_partial_lookup(false),m_commit_pinyin_length(0),
 	 m_phrases_table(phrase_index_file),m_phrase_idx_filename(phrase_index_file)
 {
 }
@@ -69,6 +69,8 @@ unsigned int PinyinEngine::search(const char* pinyin)
 {
 	unsigned int pinyin_len = pinyin ? strlen(pinyin) : 0;
 	m_initial_lookup = false;
+	m_partial_lookup = false;
+	m_commit_pinyin_length = pinyin_len;
 
 	if(pinyin_len == 1){
 		PinyinInitial initial = get_initial_from_letter(pinyin[0]);
@@ -92,6 +94,22 @@ unsigned int PinyinEngine::search(const char* pinyin)
 	if(isPhrase()){
 		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
 		m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+		if(count == 0 && pinyin_len > 1){
+			PinyinKey first_key;
+			int first_len = first_key.set_key(scim_default_pinyin_validator,pinyin);
+			if(first_len > 0 && (unsigned int)first_len < pinyin_len){
+				unsigned int char_count=m_table.find_chars(m_chars,first_key);
+				if(char_count > 0){
+					char first_pinyin[SCIM_PINYIN_KEY_MAXLEN+1];
+					memcpy(first_pinyin,pinyin,first_len);
+					first_pinyin[first_len]=0;
+					m_key.set_key(first_pinyin);
+					m_partial_lookup = true;
+					m_commit_pinyin_length = first_len;
+					return char_count;
+				}
+			}
+		}
 		return count;
 	}
 	else{

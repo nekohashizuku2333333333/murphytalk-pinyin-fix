@@ -105,7 +105,7 @@ const int PINYIN_Y = 2;
 const unsigned short ZHONG = 0x4e2d;   //Hanzi : Chinese 
 const unsigned short YING  = 0x82f1;   //Hanzi : English
 
-const char ABOUT[]="About";
+const char ABOUT[]="關於";
 
 const char MAKEPHRASE_OPEN [] = "\xe3\x80\x90\xe9\x80\xa0\xe8\xaf\x8d\x20";
 const char MAKEPHRASE_CLOSE[] = "\xe3\x80\x91";
@@ -411,6 +411,7 @@ bool QPinyinFrame::commit_selection(int k)
 	bool bUpdate = false;
 	unsigned int index = (k == '0') ? 9 : (k-'1');
 	if(index<m_ime_info.candidates_on_page){
+		unsigned int consumed = m_engine.get_commit_pinyin_length();
 		m_engine.hit(m_ime_info.first_visible+index);
 		if(m_engine.isPhrase()){
 			QString phrase=get_phrase(m_ime_info.first_visible+index);
@@ -434,7 +435,13 @@ bool QPinyinFrame::commit_selection(int k)
 				SendKey(get_charunicode(index)); 
 			}
 		}
-		resetState();
+		if(!m_bMakingPhrase && consumed > 0 && consumed < m_ime_info.pinyin.size()){
+			m_ime_info.pinyin.erase(0,consumed);
+			search();
+		}
+		else{
+			resetState();
+		}
 		bUpdate=true;
 	}
 	return bUpdate;
@@ -639,14 +646,13 @@ void QPinyinFrame::mouseReleaseEvent(QMouseEvent* m)
 
 	if(hit_test_helper(x,y,m_about_rect)){
 		//show about infomation
-		QMessageBox::information(this,"About",
-                                         "MurphyTalk Pinyin "VERSION"<br><br>"
-                                         "Created by <font color=\"#0000FF\">MurphyTalk</font><br>"
-					 "aka:<font color=\"#0000FF\">DeepWater</font>@<b>Hi-PDA</b> community<br>"
-					 "contact me at <font color=\"#0000FF\">murphytalk@gmail.com</font><br><br>"
-					 "This software is partially based on scim chinese<br>"
-					 "written by James Su(suzhe@tsinghua.org.cn)<br><br>"
-					 "This small piece of cake is released under GPL;)");
+		QMessageBox::information(this,"關於此軟體",
+                                         "MurphyTalk 拼音 "VERSION"<br><br>"
+                                         "原版 By MurphyTalk<br>"
+										"現代修改版 By nekohashizuku2333333333<br>"
+					 "此軟體部分基於SCIM輸入法<br>"
+					 "James Su(suzhe@tsinghua.org.cn) 作品<br><br>"
+					 "本軟體使用GPL授權<br>");
 	}	
 	else if(hit_test_helper(x,y,m_leftbtn_rect)){
 		prev_page();		

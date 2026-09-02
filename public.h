@@ -31,7 +31,7 @@
 
 std::string trim(std::string &str, char ch = ' ');
 
-#define VERSION		"0.03"
+#define VERSION		"1.1.45"
 #define FILE_VERSION	"0.03"
 
 #endif

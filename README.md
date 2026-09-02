@@ -12,6 +12,8 @@
 
 本分支在原 MurphyTalk Pinyin 0.03 源码基础上继续修复，目标是让它更接近现代中文输入法的日常使用体验。
 
+当前修改版显示版本为 `1.1.45`。`FILE_VERSION` 仍保留为 `0.03`，这是短语/词库文件格式版本，不等同于软件显示版本。
+
 ### 1. 关闭造词模式
 
 原程序里，单按 `Shift` 会进入“造词模式”。这会抢占 Shift 上档符号的行为，导致中文标点输入不正常。
@@ -81,6 +83,7 @@ if(send_hanzi_mark(u)){
 - 新增 `PinyinPhraseKey::set_initials_key()`。
 - 当输入长度为 1 且是合法声母时，搜索层先汇总词表中该声母下所有完整拼音的单字候选。
 - 当输入长度大于 1 且全部可作为声母时，搜索层先把它解析成一组“声母 + 空韵母”的短语键。
+- 当完整拼音短语查不到时，会回退到第一个完整音节的单字候选。例如 `wocao` 若词库中没有整词，会先显示 `wo` 的候选；选中第一个字后保留剩余 `cao` 并继续搜索。
 - 短语比较器原本已经支持空韵母作为通配符，本分支继续利用这个机制匹配完整拼音词条。
 - 补充 `z/c/s` 与 `zh/ch/sh` 的声母兼容，因此 `zg` 能匹配 `zhongguo`，`cs` 能匹配 `chusheng` 等。
 - 如果简拼查不到候选，会自动退回原来的完整拼音解析流程。
@@ -318,14 +321,15 @@ debian-binary
 - 最终必须使用 Qt/E 2.3.2，并加 `-DQT_NO_PROPERTIES -DQT_NO_DRAGANDDROP`，否则会分别多出不匹配的 metaobject 签名和 drag/drop QWidget 虚函数。
 - 源码里不要直接引用全局 `qwsServer` 对象；旧包使用的是 `QWSServer::setKeyboardFilter()` 和 `QWSServer::sendKeyEvent()` 静态函数。目标库导出了静态函数，但不应要求插件解析 `qwsServer` 全局对象。
 - 后来的 `qtopia232` 包解决了插件加载问题，但单字母声母仍按完整拼音查表，`w/q/n` 这类输入没有候选。
-- 最终的 `qtopia232_initial` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so，并加入单声母联想查询。
+- 后来的 `qtopia232_initial` 包加入了单声母联想查询，但完整拼音短语缺词时仍不会自动分段。
+- 最终的 `qtopia232_segment` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so，并加入单声母联想查询和首音节分段回退。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232_initial.ipk
+dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_segment.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -340,7 +344,7 @@ dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232_initial.ipk
 校验：
 
 ```text
-SHA256: d520a461211c40e683966ce6aed467ce0f8efea096a2de73e8ef793f256bdd6d
+SHA256: 0c4bc921604f3870197f2aba030ed2b7d54b1d8ab8f1b44b9c24da3bbf4f8c3c
 ```
 
 ## 验收建议
@@ -353,6 +357,7 @@ SHA256: d520a461211c40e683966ce6aed467ce0f8efea096a2de73e8ef793f256bdd6d
 4. 输入 `w`，应能出现“我、为、文、无、问”等单声母联想候选。
 5. 输入 `nh`，应能按简拼查到“你好”等 `n h` 声母短语。
 6. 输入 `zg`，应能匹配 `zhongguo` 这类 `zh g` 词条。
+7. 输入一个词库里没有的完整拼音组合，例如 `wocao`，应先显示 `wo` 的候选；选中后保留 `cao` 继续显示第二个音节候选。
 
 ## 本地验证记录
 

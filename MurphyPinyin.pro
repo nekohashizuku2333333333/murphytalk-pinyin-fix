@@ -7,6 +7,6 @@ DESTDIR		= 	DIST
 INCLUDEPATH 	+= 	$(QPEDIR)/include
 DEPENDPATH      += 	../$(QPEDIR)/include ../../taskbar
 LIBS            += 	-lqpe
-VERSION		= 	0.0.1
+VERSION		= 	1.1.45
 
 #TRANSLATIONS += ../../i18n/de/libqpickboard.ts
