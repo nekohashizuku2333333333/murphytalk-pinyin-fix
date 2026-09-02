@@ -589,6 +589,11 @@ void PinyinPhraseKey::set_key(const char *keystr)
         PinyinKey::parse_pinyin_key(scim_default_pinyin_validator,m_keys,keystr);
 }
 
+void PinyinPhraseKey::set_key_vector(const PinyinKeyVector &keys)
+{
+	m_keys = keys;
+}
+
 bool PinyinPhraseKey::set_initials_key(const char *keystr)
 {
 	m_keys.clear();

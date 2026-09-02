@@ -109,6 +109,7 @@ public:
 	friend class PinyinPhraseEntry;
 public:
 	void set_key(const char *keystr);
+	void set_key_vector(const PinyinKeyVector &keys);
 	bool set_initials_key(const char *keystr);
 	bool set_mixed_key(const char *keystr);
 	inline bool isValid(){

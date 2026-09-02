@@ -80,6 +80,122 @@ static unsigned int get_token_consumed_length(const char *pinyin,unsigned int pi
 	return p - pinyin;
 }
 
+static bool phrase_offset_exists(const PhraseOffsetFrequencyPairVector &phrases,uint32 offset)
+{
+	for(PhraseOffsetFrequencyPairVector::const_iterator i=phrases.begin();i!=phrases.end();i++){
+		if(i->first == offset)
+			return true;
+	}
+	return false;
+}
+
+static void append_unique_phrases(PhraseOffsetFrequencyPairVector &dst,
+				  const PhraseOffsetFrequencyPairVector &src)
+{
+	for(PhraseOffsetFrequencyPairVector::const_iterator i=src.begin();i!=src.end();i++){
+		if(!phrase_offset_exists(dst,i->first))
+			dst.push_back(*i);
+	}
+}
+
+static void collect_pinyin_splits(const char *pinyin,unsigned int pinyin_len,
+				  unsigned int pos,PinyinKeyVector &current,
+				  std::vector<PinyinKeyVector> &splits)
+{
+	if(splits.size() >= 16)
+		return;
+
+	while(pos < pinyin_len && pinyin[pos] == '\'')
+		pos++;
+
+	if(pos >= pinyin_len){
+		if(current.size() > 1)
+			splits.push_back(current);
+		return;
+	}
+
+	if(!isalpha(pinyin[pos]))
+		return;
+
+	unsigned int max_len = SCIM_PINYIN_KEY_MAXLEN;
+	if(pos + max_len > pinyin_len)
+		max_len = pinyin_len - pos;
+
+	for(unsigned int len=max_len;len>0;len--){
+		bool has_separator = false;
+		for(unsigned int i=0;i<len;i++){
+			if(pinyin[pos+i] == '\''){
+				has_separator = true;
+				break;
+			}
+		}
+		if(has_separator)
+			continue;
+
+		PinyinKey key;
+		int parsed = key.set_key(scim_default_pinyin_validator,pinyin+pos,len);
+		if(parsed == (int)len && key.get_final() != SCIM_PINYIN_ZeroFinal){
+			current.push_back(key);
+			collect_pinyin_splits(pinyin,pinyin_len,pos+len,current,splits);
+			current.pop_back();
+		}
+	}
+}
+
+static void collect_pinyin_splits(const char *pinyin,unsigned int pinyin_len,
+				  std::vector<PinyinKeyVector> &splits)
+{
+	PinyinKeyVector current;
+	splits.clear();
+	collect_pinyin_splits(pinyin,pinyin_len,0,current,splits);
+}
+
+static void collect_mixed_splits(const char *pinyin,unsigned int pinyin_len,
+				 unsigned int pos,PinyinKeyVector &current,
+				 std::vector<PinyinKeyVector> &splits)
+{
+	if(splits.size() >= 16)
+		return;
+
+	if(pos >= pinyin_len){
+		if(current.size() > 1)
+			splits.push_back(current);
+		return;
+	}
+
+	if(!isalpha(pinyin[pos]))
+		return;
+
+	unsigned int max_len = SCIM_PINYIN_KEY_MAXLEN;
+	if(pos + max_len > pinyin_len)
+		max_len = pinyin_len - pos;
+
+	for(unsigned int len=max_len;len>1;len--){
+		PinyinKey key;
+		int parsed = key.set_key(scim_default_pinyin_validator,pinyin+pos,len);
+		if(parsed == (int)len && key.get_final() != SCIM_PINYIN_ZeroFinal){
+			current.push_back(key);
+			collect_mixed_splits(pinyin,pinyin_len,pos+len,current,splits);
+			current.pop_back();
+		}
+	}
+
+	PinyinInitial initial = get_initial_from_letter(pinyin[pos]);
+	if(initial != SCIM_PINYIN_ZeroInitial){
+		current.push_back(PinyinKey(initial, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone));
+		collect_mixed_splits(pinyin,pinyin_len,pos+1,current,splits);
+		current.pop_back();
+	}
+}
+
+static void collect_mixed_splits(const char *pinyin,unsigned int pinyin_len,
+				 std::vector<PinyinKeyVector> &splits)
+{
+	PinyinKeyVector current;
+	splits.clear();
+	collect_mixed_splits(pinyin,pinyin_len,0,current,splits);
+}
+
 PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
 	 m_initial_lookup(false),m_partial_lookup(false),m_commit_pinyin_length(0),
@@ -105,6 +221,26 @@ unsigned int PinyinEngine::search(const char* pinyin)
 			m_key.clear_key();
 			m_initial_lookup = true;
 			return m_table.find_chars_by_initial(m_chars,initial);
+		}
+	}
+
+	if(pinyin_len > 1){
+		std::vector<PinyinKeyVector> splits;
+		collect_pinyin_splits(pinyin,pinyin_len,splits);
+		if(splits.size() > 0){
+			PhraseOffsetFrequencyPairVector all_pairs;
+			PhraseOffsetFrequencyPairVector pairs;
+			for(std::vector<PinyinKeyVector>::iterator i=splits.begin();i!=splits.end();i++){
+				m_key.set_key_vector(*i);
+				unsigned int count=m_phrases_table.find_phrases(pairs,m_key);
+				if(count > 0)
+					append_unique_phrases(all_pairs,pairs);
+			}
+			if(all_pairs.size() > 0){
+				m_offset_freq_pairs = all_pairs;
+				m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+				return m_offset_freq_pairs.size();
+			}
 		}
 	}
 
@@ -140,6 +276,26 @@ unsigned int PinyinEngine::search(const char* pinyin)
 					m_commit_pinyin_length = get_token_consumed_length(pinyin,pinyin_len,token,token_len);
 					return char_count;
 				}
+			}
+		}
+	}
+
+	if(pinyin_len > 1 && !strchr(pinyin,'\'')){
+		std::vector<PinyinKeyVector> splits;
+		collect_mixed_splits(pinyin,pinyin_len,splits);
+		if(splits.size() > 0){
+			PhraseOffsetFrequencyPairVector all_pairs;
+			PhraseOffsetFrequencyPairVector pairs;
+			for(std::vector<PinyinKeyVector>::iterator i=splits.begin();i!=splits.end();i++){
+				m_key.set_key_vector(*i);
+				unsigned int count=m_phrases_table.find_phrases(pairs,m_key);
+				if(count > 0)
+					append_unique_phrases(all_pairs,pairs);
+			}
+			if(all_pairs.size() > 0){
+				m_offset_freq_pairs = all_pairs;
+				m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+				return m_offset_freq_pairs.size();
 			}
 		}
 	}

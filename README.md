@@ -124,6 +124,31 @@ if(send_hanzi_mark(u)){
 
 注意：简拼能否直接出现某个整词，仍取决于词库里是否有对应短语。当前保留旧包词库，因此若旧词库没有“你好”，`nh` 或 `n hao` 不会凭空生成“你好”，但会回退到第一个音节/声母候选，保证不会空白卡住。
 
+### 3.1. 全拼分词、歧义切分和隔音符
+
+音节表来源为 `scim/scim_pinyin.cpp` 内置的 `scim_pinyin_initials` 与 `scim_pinyin_finals`，并继续使用原 SCIM `PinyinKey::set_key()` 做合法性校验。
+
+新增的连续拼音切分逻辑在 `PinyinEngine.cpp` 中实现：
+
+- 对输入串做最长优先 DFS，按 `SCIM_PINYIN_KEY_MAXLEN` 从长到短尝试合法音节。
+- 一个连续串最多收集 16 种切分，避免老机器上输入超长串时拖慢。
+- `xian` 这类歧义串会同时产生 `xian` 和 `xi an` 方向的候选；候选统一合并展示。
+- 用户输入 `'` 时作为强制音节边界，例如 `xi'an` 只能跨边界切为 `xi an`，不会把 `'` 两侧合成一个音节。
+- 相同短语 offset 会去重，避免不同切分命中同一短语时重复显示。
+
+排序融合策略：
+
+- 全拼精确切分先查；只要有全拼短语命中，就优先展示这些候选。
+- 全拼没有短语命中时，再进入混合简拼、纯声母简拼和原有单字回退。
+- 多个全拼切分命中的候选合并后仍按词库频率排序。
+- 简拼/混合命中天然低于全拼精确命中，不抢全拼候选首位。
+
+连续混合简拼也已加入：
+
+- `bj` 会解析为 `b + j`。
+- `beij` 会解析为 `bei + j`。
+- 完整音节保留精确匹配，单字母声母使用空韵母通配。
+
 ### 4. 现代编译器兼容性补充
 
 为了让底层模块能在现代 GCC 上通过语法编译，补充了少量标准头文件：
@@ -350,14 +375,15 @@ debian-binary
 - 后来的 `qtopia232_initial` 包加入了单声母联想查询，但完整拼音短语缺词时仍不会自动分段。
 - 后来的 `qtopia232_segment` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so，并加入单声母联想查询和首音节分段回退。
 - 后来的 `qtopia232_mixed` 包继续沿用上述兼容打包格式，并补上简体 UI、候选栏原始拼音显示、带空格混合输入解析和 `n hao` 这类输入的首 token 回退。
-- 最终的 `qtopia232_preedit` 包在 `mixed` 基础上补上预编辑确认行为：确认前字母只留在输入法候选栏，数字/空格/回车确认后才上屏，退格和 `Esc` 只作用于预编辑状态。
+- 后来的 `qtopia232_preedit` 包在 `mixed` 基础上补上预编辑确认行为：确认前字母只留在输入法候选栏，数字/空格/回车确认后才上屏，退格和 `Esc` 只作用于预编辑状态。
+- 最终的 `qtopia232_bcore` 包继续加入 §B 拼音解析核心的一部分：全拼多切分、隔音符强制边界、连续混合简拼，以及全拼优先于简拼的查询顺序。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_preedit.ipk
+dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_bcore.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -372,7 +398,7 @@ dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_preedit.ipk
 校验：
 
 ```text
-SHA256: 5dd4711cdf942c6881e71c1997f7266b773163743dcb50342b1bc6ba9dcffa6b
+SHA256: f44e12d8e9ad15c47975c89f8972f7512a751f4911eb6fb75b0baf378a41b686
 ```
 
 ## 验收建议
