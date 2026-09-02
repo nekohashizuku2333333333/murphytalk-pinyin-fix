@@ -27,6 +27,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #ifndef X86
 #include <algo.h>

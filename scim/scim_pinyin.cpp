@@ -30,6 +30,8 @@
 
 //#include <scim.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <string.h>
 #include "scim_pinyin.h"
 
 /*

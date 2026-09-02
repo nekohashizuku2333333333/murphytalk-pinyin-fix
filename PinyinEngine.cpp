@@ -24,6 +24,8 @@
 #include "PinyinEngine.h"
 #include "public.h"
 
+#include <string.h>
+
 PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
 	 m_phrases_table(phrase_index_file),m_phrase_idx_filename(phrase_index_file)
@@ -37,9 +39,19 @@ PinyinEngine::~PinyinEngine()
 
 unsigned int PinyinEngine::search(const char* pinyin)
 {
+	unsigned int pinyin_len = pinyin ? strlen(pinyin) : 0;
+
+	if(pinyin_len > 1 && m_key.set_initials_key(pinyin)){
+		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
+		if(count > 0){
+			m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+			return count;
+		}
+	}
+
 	m_key.set_key(pinyin);
 
-	if(isPhrase()){		
+	if(isPhrase()){
 		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
 		m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
 		return count;

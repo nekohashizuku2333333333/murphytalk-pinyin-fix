@@ -459,6 +459,36 @@ bool QPinyinFrame::send_hanzi_mark(int ascii_mark)
 		case ':':
 			unicode = COLON_MARK;
 			break;
+		case ';':
+			unicode = 0xff1b;
+			break;
+		case '!':
+			unicode = 0xff01;
+			break;
+		case '(':
+			unicode = 0xff08;
+			break;
+		case ')':
+			unicode = 0xff09;
+			break;
+		case '[':
+			unicode = 0x3010;
+			break;
+		case ']':
+			unicode = 0x3011;
+			break;
+		case '{':
+			unicode = 0xff5b;
+			break;
+		case '}':
+			unicode = 0xff5d;
+			break;
+		case '\\':
+			unicode = 0x3001;
+			break;
+		case '~':
+			unicode = 0xff5e;
+			break;
 	}
 	if(unicode!=0){
 		SendKey(unicode);
@@ -487,6 +517,10 @@ bool QPinyinFrame::GetKey(int u, int k/*,int m*/)/*int unicode, int keycode, int
 	bool bUpdate         = false;
 	bool bKeyProcessed   = true;
 	
+	if(send_hanzi_mark(u)){
+		return true;
+	}
+
         if( k >= '0' && k <= '9'){
 commit:
 		bUpdate=commit_selection(k);
@@ -536,20 +570,7 @@ input:
 		
 	}
 	else if(k == Qt::Key_Shift){
-		if(m_bMakingPhrase){
-			//commit the new phrase
-			m_bMakingPhrase=false;
-			m_engine.append_phrase(m_ime_info.phrase,m_making_phrase_pinyin.c_str());
-			m_ime_info.phrase="";
-			resetState();
-			bUpdate=true;
-		}
-		else if(m_ime_info.pinyin.size()==0){
-			printX86("entering making phrase mode...\n");
-			m_making_phrase_pinyin="";
-			m_bMakingPhrase=true;
-			bUpdate=true;
-		}
+		bKeyProcessed=true;
 	}
 	else if(u == 9 && k == Qt::Key_Tab){
 		m_bEnglishMode=true;
@@ -563,7 +584,7 @@ input:
 		resetState();
 		bUpdate=true;
 	}
-	else if(!send_hanzi_mark(k)){
+	else if(!send_hanzi_mark(u)){
 		bKeyProcessed=false;
 	}
 	

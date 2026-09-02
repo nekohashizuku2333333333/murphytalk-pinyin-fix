@@ -31,9 +31,6 @@ public:
 	~QPinyinFrame();
 
 	void resetState(){
-		if(m_bMakingPhrase){
-			m_making_phrase_pinyin+=m_ime_info.pinyin;
-		}
 		m_ime_info.pinyin="";
 		m_ime_info.candidates_count=0;
 		m_engine.clear_key();

@@ -109,6 +109,7 @@ public:
 	friend class PinyinPhraseEntry;
 public:
 	void set_key(const char *keystr);
+	bool set_initials_key(const char *keystr);
 	inline bool isValid(){
 		return m_keys.size()>0;
 	}
@@ -155,6 +156,20 @@ protected:
 class PinyinPhraseKeyLessThan
 	: public std::binary_function <PinyinPhraseKey, PinyinPhraseKey, bool>
 {
+	bool initial_equal_to(PinyinKey lhs,
+			      PinyinKey rhs) const {
+		PinyinInitial left = lhs.get_initial();
+		PinyinInitial right = rhs.get_initial();
+		if(left == right) return true;
+		if((left == SCIM_PINYIN_Zi && right == SCIM_PINYIN_Zhi) ||
+		   (left == SCIM_PINYIN_Zhi && right == SCIM_PINYIN_Zi)) return true;
+		if((left == SCIM_PINYIN_Ci && right == SCIM_PINYIN_Chi) ||
+		   (left == SCIM_PINYIN_Chi && right == SCIM_PINYIN_Ci)) return true;
+		if((left == SCIM_PINYIN_Si && right == SCIM_PINYIN_Shi) ||
+		   (left == SCIM_PINYIN_Shi && right == SCIM_PINYIN_Si)) return true;
+		return false;
+	}
+
 	bool final_equal_to(PinyinKey lhs,
 			    PinyinKey rhs) const {
 		return lhs.get_final()==rhs.get_final()||
@@ -165,9 +180,9 @@ public:
 	bool operator () (PinyinPhraseKey lhs,
 			  PinyinPhraseKey rhs) const {
 
-		unsigned int count = std::min(lhs.m_keys.size(),rhs.get_key_count());
+		unsigned int count = std::min(static_cast<unsigned int>(lhs.m_keys.size()),rhs.get_key_count());
 		for(unsigned int i=0;i<count;i++){
-			if(lhs.m_keys[i].get_initial()==rhs.m_keys[i].get_initial()){
+			if(initial_equal_to(lhs.m_keys[i],rhs.m_keys[i])){
 				continue;
 			}
 			else{

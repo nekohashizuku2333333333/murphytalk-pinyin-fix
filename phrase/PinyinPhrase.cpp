@@ -24,6 +24,8 @@
 #include "PinyinPhrase.h"
 #include "../public.h"
 
+#include <algorithm>
+#include <string.h>
 #include <map>
 
 /////////////////////////////////////////////////////////////////////////
@@ -558,6 +560,46 @@ PinyinPhraseKey::~PinyinPhraseKey()
 void PinyinPhraseKey::set_key(const char *keystr)
 {
         PinyinKey::parse_pinyin_key(scim_default_pinyin_validator,m_keys,keystr);
+}
+
+bool PinyinPhraseKey::set_initials_key(const char *keystr)
+{
+	m_keys.clear();
+	if(keystr == NULL || keystr[0] == 0){
+		return false;
+	}
+
+	for(const char *p = keystr; *p; p++){
+		PinyinInitial initial = SCIM_PINYIN_ZeroInitial;
+		switch(*p){
+			case 'b': initial = SCIM_PINYIN_Bo; break;
+			case 'c': initial = SCIM_PINYIN_Ci; break;
+			case 'd': initial = SCIM_PINYIN_De; break;
+			case 'f': initial = SCIM_PINYIN_Fo; break;
+			case 'g': initial = SCIM_PINYIN_Ge; break;
+			case 'h': initial = SCIM_PINYIN_He; break;
+			case 'j': initial = SCIM_PINYIN_Ji; break;
+			case 'k': initial = SCIM_PINYIN_Ke; break;
+			case 'l': initial = SCIM_PINYIN_Le; break;
+			case 'm': initial = SCIM_PINYIN_Mo; break;
+			case 'n': initial = SCIM_PINYIN_Ne; break;
+			case 'p': initial = SCIM_PINYIN_Po; break;
+			case 'q': initial = SCIM_PINYIN_Qi; break;
+			case 'r': initial = SCIM_PINYIN_Ri; break;
+			case 's': initial = SCIM_PINYIN_Si; break;
+			case 't': initial = SCIM_PINYIN_Te; break;
+			case 'w': initial = SCIM_PINYIN_Wo; break;
+			case 'x': initial = SCIM_PINYIN_Xi; break;
+			case 'y': initial = SCIM_PINYIN_Yi; break;
+			case 'z': initial = SCIM_PINYIN_Zi; break;
+			default:
+				m_keys.clear();
+				return false;
+		}
+		m_keys.push_back(PinyinKey(initial, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone));
+	}
+
+	return m_keys.size() > 1;
 }
 
 String PinyinPhraseKey::get_key_string()
