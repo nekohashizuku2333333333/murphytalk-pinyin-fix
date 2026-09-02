@@ -187,7 +187,8 @@ int QPinyinFrame::init_gui_dimention()
 
 	//horizonal line which seperates pinyin and hanzi candidates
 	y+=rect.height()+2;
-	QRect about = metric.boundingRect(QString(ABOUT));
+	QString about_text = QString::fromUtf8(ABOUT);
+	QRect about = metric.boundingRect(about_text);
 	m_about_rect = QRect(width-2-about.width(),PINYIN_Y,about.width(),about.height());
 	printX86("about rect(%d,%d,%d,%d)\n",m_about_rect.left(),m_about_rect.top(),m_about_rect.width(),m_about_rect.height());
 
@@ -299,8 +300,9 @@ void QPinyinFrame::paintEvent(QPaintEvent * e)
 
 	//about
 	painter.setPen(penPage);
-	QRect about = metric.boundingRect(QString(ABOUT));
-	painter.drawText(width-2-about.width(),rect.height(),QString(ABOUT));
+	QString about_text = QString::fromUtf8(ABOUT);
+	QRect about = metric.boundingRect(about_text);
+	painter.drawText(width-2-about.width(),rect.height(),about_text);
 	painter.drawLine(width-2-about.width(),rect.height()+1,width-2,rect.height()+1);
 
 	///////////////////////////////////////////////
@@ -329,7 +331,7 @@ void QPinyinFrame::paintEvent(QPaintEvent * e)
 		if(label == 10)
 			label = 0;
 		str.sprintf("%d.",label);//1. 2. ... 9. 0.
-     		if(m_engine.isPhrase()){
+     		if(m_engine.is_phrase_candidate(i)){
 			str+=get_phrase(i);
 		}
 		else{
@@ -413,10 +415,11 @@ bool QPinyinFrame::commit_selection(int k)
 	bool bUpdate = false;
 	unsigned int index = (k == '0') ? 9 : (k-'1');
 	if(index<m_ime_info.candidates_on_page){
-		unsigned int consumed = m_engine.get_commit_pinyin_length();
-		m_engine.hit(m_ime_info.first_visible+index);
-		if(m_engine.isPhrase()){
-			QString phrase=get_phrase(m_ime_info.first_visible+index);
+		unsigned int global_index = m_ime_info.first_visible+index;
+		unsigned int consumed = m_engine.get_commit_pinyin_length(global_index);
+		m_engine.hit(global_index);
+		if(m_engine.is_phrase_candidate(global_index)){
+			QString phrase=get_phrase(global_index);
 			if(m_bMakingPhrase){
 				m_ime_info.phrase+=phrase;
 			}
@@ -693,13 +696,13 @@ void QPinyinFrame::mouseReleaseEvent(QMouseEvent* m)
 
 	if(hit_test_helper(x,y,m_about_rect)){
 		//show about infomation
-		QMessageBox::information(this,"关于此软件",
-                                         "MurphyTalk 拼音 "VERSION"<br><br>"
+		QMessageBox::information(this,QString::fromUtf8("关于此软件"),
+                                         QString::fromUtf8("MurphyTalk 拼音 "VERSION"<br><br>"
                                          "原版 By MurphyTalk<br>"
-										"现代修改版 By nekohashizuku2333333333<br>"
+					 "现代修改版 By nekohashizuku2333333333<br>"
 					 "此软件部分基于SCIM输入法<br>"
 					 "James Su(suzhe@tsinghua.org.cn) 作品<br><br>"
-					 "本软件使用GPL授权<br>");
+					 "本软件使用GPL授权<br>"));
 	}	
 	else if(hit_test_helper(x,y,m_leftbtn_rect)){
 		prev_page();		

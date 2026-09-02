@@ -39,16 +39,18 @@ public:
 	inline unsigned int get_commit_pinyin_length(){
 		return m_commit_pinyin_length;
 	}
+	unsigned int get_commit_pinyin_length(unsigned int index);
 	inline unsigned int get_char_count(){
 		return m_chars.size();
 	}
 	QChar get_char(unsigned int index);
 	QString get_phrase(unsigned int index);
+	bool is_phrase_candidate(unsigned int index);
 	void hit(unsigned int index);
 	void save_table();
 	void append_phrase(QString&,const char* pinyin);
 	inline bool isPhrase(){
-		return m_key.get_key_count()>1;
+		return m_phrase_candidate_count>0;
 	}
 	inline String get_formatted_pinyin(){
 		return m_key.get_key_string();
@@ -66,7 +68,10 @@ private:
 	String      m_table_filename;
 	bool        m_initial_lookup;
 	bool        m_partial_lookup;
+	bool        m_mixed_candidates;
 	unsigned int m_commit_pinyin_length;
+	unsigned int m_mixed_char_commit_length;
+	unsigned int m_phrase_candidate_count;
 	
 	//phrase
        	PinyinPhraseTable               m_phrases_table;
