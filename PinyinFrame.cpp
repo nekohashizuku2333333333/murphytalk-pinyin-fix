@@ -621,7 +621,12 @@ input:
 		if(m_ime_info.pinyin.size()>0){			
 			String::iterator pos=m_ime_info.pinyin.end()-1;
 			m_ime_info.pinyin.erase(pos);
-			search();
+			if(m_ime_info.pinyin.size()>0){
+				search();
+			}
+			else{
+				resetState();
+			}
 			bUpdate=true;
 		}
 		else{

@@ -33,6 +33,9 @@ public:
 	void resetState(){
 		m_ime_info.pinyin="";
 		m_ime_info.candidates_count=0;
+		m_ime_info.first_visible=0;
+		m_ime_info.candidates_on_page=0;
+		m_ime_info.candidates_on_prev_page=0;
 		m_engine.clear_key();
 	}
 	QSize sizeHint() const ;
@@ -68,6 +71,9 @@ private:
 
 		ime_info_struc(){
 			candidates_count = 0;
+			first_visible = 0;
+			candidates_on_page = 0;
+			candidates_on_prev_page = 0;
 		}
 
 		bool prev_page_available(){

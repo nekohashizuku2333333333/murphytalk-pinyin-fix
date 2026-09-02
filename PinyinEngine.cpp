@@ -98,6 +98,25 @@ static void append_unique_phrases(PhraseOffsetFrequencyPairVector &dst,
 	}
 }
 
+bool PinyinEngine::append_first_syllable_chars(const char *pinyin,unsigned int pinyin_len)
+{
+	if(pinyin_len <= 1)
+		return false;
+
+	PinyinKey first_key;
+	int first_len = first_key.set_key(scim_default_pinyin_validator,pinyin);
+	if(first_len <= 0 || (unsigned int)first_len >= pinyin_len)
+		return false;
+
+	unsigned int char_count = m_table.find_chars(m_chars,first_key);
+	if(char_count == 0)
+		return false;
+
+	m_mixed_candidates = true;
+	m_mixed_char_commit_length = first_len;
+	return true;
+}
+
 static void collect_pinyin_splits(const char *pinyin,unsigned int pinyin_len,
 				  unsigned int pos,PinyinKeyVector &current,
 				  std::vector<PinyinKeyVector> &splits)
@@ -221,6 +240,11 @@ unsigned int PinyinEngine::search(const char* pinyin)
 	m_chars.clear();
 	m_phrases.clear();
 
+	if(pinyin_len == 0){
+		m_key.clear_key();
+		return 0;
+	}
+
 	if(pinyin_len == 1){
 		PinyinInitial initial = get_initial_from_letter(pinyin[0]);
 		if(initial != SCIM_PINYIN_ZeroInitial){
@@ -246,7 +270,8 @@ unsigned int PinyinEngine::search(const char* pinyin)
 				m_offset_freq_pairs = all_pairs;
 				m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
 				m_phrase_candidate_count = m_phrases.size();
-				return m_phrase_candidate_count;
+				append_first_syllable_chars(pinyin,pinyin_len);
+				return m_phrase_candidate_count + m_chars.size();
 			}
 		}
 	}
@@ -339,6 +364,10 @@ unsigned int PinyinEngine::search(const char* pinyin)
 		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
 		m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
 		m_phrase_candidate_count = m_phrases.size();
+		if(count > 0){
+			append_first_syllable_chars(pinyin,pinyin_len);
+			return m_phrase_candidate_count + m_chars.size();
+		}
 		if(count == 0 && pinyin_len > 1){
 			PinyinKey first_key;
 			int first_len = first_key.set_key(scim_default_pinyin_validator,pinyin);

@@ -50,7 +50,7 @@ public:
 	void save_table();
 	void append_phrase(QString&,const char* pinyin);
 	inline bool isPhrase(){
-		return m_phrase_candidate_count>0;
+		return m_key.get_key_count()>1;
 	}
 	inline String get_formatted_pinyin(){
 		return m_key.get_key_string();
@@ -61,6 +61,7 @@ public:
 private:
 	//PinyinKeyVector   m_keys;
 	PinyinPhraseKey   m_key;
+	bool append_first_syllable_chars(const char *pinyin,unsigned int pinyin_len);
 
 	//single hanzi
 	PinyinTable m_table;
