@@ -26,6 +26,33 @@
 
 #include <algorithm>
 #include <string.h>
+
+static PinyinInitial initial_from_letter(char c)
+{
+	switch(c){
+		case 'b': return SCIM_PINYIN_Bo;
+		case 'c': return SCIM_PINYIN_Ci;
+		case 'd': return SCIM_PINYIN_De;
+		case 'f': return SCIM_PINYIN_Fo;
+		case 'g': return SCIM_PINYIN_Ge;
+		case 'h': return SCIM_PINYIN_He;
+		case 'j': return SCIM_PINYIN_Ji;
+		case 'k': return SCIM_PINYIN_Ke;
+		case 'l': return SCIM_PINYIN_Le;
+		case 'm': return SCIM_PINYIN_Mo;
+		case 'n': return SCIM_PINYIN_Ne;
+		case 'p': return SCIM_PINYIN_Po;
+		case 'q': return SCIM_PINYIN_Qi;
+		case 'r': return SCIM_PINYIN_Ri;
+		case 's': return SCIM_PINYIN_Si;
+		case 't': return SCIM_PINYIN_Te;
+		case 'w': return SCIM_PINYIN_Wo;
+		case 'x': return SCIM_PINYIN_Xi;
+		case 'y': return SCIM_PINYIN_Yi;
+		case 'z': return SCIM_PINYIN_Zi;
+		default: return SCIM_PINYIN_ZeroInitial;
+	}
+}
 #include <map>
 
 /////////////////////////////////////////////////////////////////////////
@@ -570,33 +597,55 @@ bool PinyinPhraseKey::set_initials_key(const char *keystr)
 	}
 
 	for(const char *p = keystr; *p; p++){
-		PinyinInitial initial = SCIM_PINYIN_ZeroInitial;
-		switch(*p){
-			case 'b': initial = SCIM_PINYIN_Bo; break;
-			case 'c': initial = SCIM_PINYIN_Ci; break;
-			case 'd': initial = SCIM_PINYIN_De; break;
-			case 'f': initial = SCIM_PINYIN_Fo; break;
-			case 'g': initial = SCIM_PINYIN_Ge; break;
-			case 'h': initial = SCIM_PINYIN_He; break;
-			case 'j': initial = SCIM_PINYIN_Ji; break;
-			case 'k': initial = SCIM_PINYIN_Ke; break;
-			case 'l': initial = SCIM_PINYIN_Le; break;
-			case 'm': initial = SCIM_PINYIN_Mo; break;
-			case 'n': initial = SCIM_PINYIN_Ne; break;
-			case 'p': initial = SCIM_PINYIN_Po; break;
-			case 'q': initial = SCIM_PINYIN_Qi; break;
-			case 'r': initial = SCIM_PINYIN_Ri; break;
-			case 's': initial = SCIM_PINYIN_Si; break;
-			case 't': initial = SCIM_PINYIN_Te; break;
-			case 'w': initial = SCIM_PINYIN_Wo; break;
-			case 'x': initial = SCIM_PINYIN_Xi; break;
-			case 'y': initial = SCIM_PINYIN_Yi; break;
-			case 'z': initial = SCIM_PINYIN_Zi; break;
-			default:
-				m_keys.clear();
-				return false;
+		PinyinInitial initial = initial_from_letter(*p);
+		if(initial == SCIM_PINYIN_ZeroInitial){
+			m_keys.clear();
+			return false;
 		}
 		m_keys.push_back(PinyinKey(initial, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone));
+	}
+
+	return m_keys.size() > 1;
+}
+
+bool PinyinPhraseKey::set_mixed_key(const char *keystr)
+{
+	m_keys.clear();
+	if(keystr == NULL || keystr[0] == 0){
+		return false;
+	}
+
+	const char *p = keystr;
+	while(*p){
+		while(*p == ' ')
+			p++;
+		if(!*p)
+			break;
+
+		const char *start = p;
+		while(*p && *p != ' ')
+			p++;
+		int len = p - start;
+		if(len <= 0)
+			continue;
+
+		if(len == 1){
+			PinyinInitial initial = initial_from_letter(*start);
+			if(initial == SCIM_PINYIN_ZeroInitial){
+				m_keys.clear();
+				return false;
+			}
+			m_keys.push_back(PinyinKey(initial, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone));
+		}
+		else{
+			PinyinKey key;
+			int parsed = key.set_key(scim_default_pinyin_validator,start,len);
+			if(parsed != len || key.get_final() == SCIM_PINYIN_ZeroFinal){
+				m_keys.clear();
+				return false;
+			}
+			m_keys.push_back(key);
+		}
 	}
 
 	return m_keys.size() > 1;

@@ -110,6 +110,7 @@ public:
 public:
 	void set_key(const char *keystr);
 	bool set_initials_key(const char *keystr);
+	bool set_mixed_key(const char *keystr);
 	inline bool isValid(){
 		return m_keys.size()>0;
 	}

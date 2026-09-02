@@ -95,6 +95,8 @@ private:
 	bool prev_page();
 	bool next_page();
 	bool commit_selection(int k);
+	bool commit_preedit();
+	void commit_raw_preedit();
 	inline void search(){		
 		m_ime_info.candidates_count=m_engine.search(m_ime_info.pinyin.c_str());
 		m_ime_info.first_visible=0;
@@ -103,6 +105,7 @@ private:
 #endif
 	}
 	int init_gui_dimention();
+	int get_hanzi_mark(int ascii_mark);
 	bool send_hanzi_mark(int ascii_mark);
 };
 #endif

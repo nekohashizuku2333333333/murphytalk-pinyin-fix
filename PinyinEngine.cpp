@@ -53,6 +53,33 @@ static PinyinInitial get_initial_from_letter(char c)
 	}
 }
 
+static unsigned int get_first_token(const char *pinyin,unsigned int pinyin_len,const char **token)
+{
+	const char *p = pinyin;
+	const char *end = pinyin + pinyin_len;
+	while(p < end && *p == ' ')
+		p++;
+	if(p >= end)
+		return 0;
+
+	const char *start = p;
+	while(p < end && *p != ' ')
+		p++;
+
+	*token = start;
+	return p - start;
+}
+
+static unsigned int get_token_consumed_length(const char *pinyin,unsigned int pinyin_len,
+					       const char *token,unsigned int token_len)
+{
+	const char *p = token + token_len;
+	const char *end = pinyin + pinyin_len;
+	while(p < end && *p == ' ')
+		p++;
+	return p - pinyin;
+}
+
 PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
 	 m_initial_lookup(false),m_partial_lookup(false),m_commit_pinyin_length(0),
@@ -78,6 +105,42 @@ unsigned int PinyinEngine::search(const char* pinyin)
 			m_key.clear_key();
 			m_initial_lookup = true;
 			return m_table.find_chars_by_initial(m_chars,initial);
+		}
+	}
+
+	if(pinyin_len > 1 && strchr(pinyin,' ') && m_key.set_mixed_key(pinyin)){
+		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
+		if(count > 0){
+			m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+			return count;
+		}
+
+		const char *token = NULL;
+		unsigned int token_len = get_first_token(pinyin,pinyin_len,&token);
+		if(token_len == 1){
+			PinyinInitial initial = get_initial_from_letter(token[0]);
+			if(initial != SCIM_PINYIN_ZeroInitial){
+				m_key.clear_key();
+				m_initial_lookup = true;
+				m_commit_pinyin_length = get_token_consumed_length(pinyin,pinyin_len,token,token_len);
+				return m_table.find_chars_by_initial(m_chars,initial);
+			}
+		}
+		else if(token_len > 1){
+			PinyinKey first_key;
+			int parsed = first_key.set_key(scim_default_pinyin_validator,token,token_len);
+			if(parsed == (int)token_len && first_key.get_final() != SCIM_PINYIN_ZeroFinal){
+				unsigned int char_count=m_table.find_chars(m_chars,first_key);
+				if(char_count > 0){
+					char first_pinyin[SCIM_PINYIN_KEY_MAXLEN+1];
+					memcpy(first_pinyin,token,token_len);
+					first_pinyin[token_len]=0;
+					m_key.set_key(first_pinyin);
+					m_partial_lookup = true;
+					m_commit_pinyin_length = get_token_consumed_length(pinyin,pinyin_len,token,token_len);
+					return char_count;
+				}
+			}
 		}
 	}
 

@@ -35,6 +35,8 @@
 #include <qpe/qpeapplication.h>
 #include <qnamespace.h>
 
+#include <string.h>
+
 #include "public.h"
 #include "Config.h"
 
@@ -105,7 +107,7 @@ const int PINYIN_Y = 2;
 const unsigned short ZHONG = 0x4e2d;   //Hanzi : Chinese 
 const unsigned short YING  = 0x82f1;   //Hanzi : English
 
-const char ABOUT[]="關於";
+const char ABOUT[]="关于";
 
 const char MAKEPHRASE_OPEN [] = "\xe3\x80\x90\xe9\x80\xa0\xe8\xaf\x8d\x20";
 const char MAKEPHRASE_CLOSE[] = "\xe3\x80\x91";
@@ -285,7 +287,7 @@ void QPinyinFrame::paintEvent(QPaintEvent * e)
 	}
 	//pinyin inputed by user
 	painter.setPen(penText);
-	painter.drawText(X,Y,QString(m_engine.get_formatted_pinyin().c_str()));
+	painter.drawText(X,Y,QString(m_ime_info.pinyin.c_str()));
 
 	//horizonal line which seperates pinyin and hanzi candidates
 	y+=rect.height()+2;
@@ -447,7 +449,28 @@ bool QPinyinFrame::commit_selection(int k)
 	return bUpdate;
 }
 
-bool QPinyinFrame::send_hanzi_mark(int ascii_mark)
+void QPinyinFrame::commit_raw_preedit()
+{
+	for(unsigned int i=0;i<m_ime_info.pinyin.size();i++){
+		SendKey(m_ime_info.pinyin[i]);
+	}
+	resetState();
+}
+
+bool QPinyinFrame::commit_preedit()
+{
+	if(m_ime_info.pinyin.size() == 0)
+		return false;
+
+	if(m_ime_info.candidates_on_page > 0){
+		return commit_selection('1');
+	}
+
+	commit_raw_preedit();
+	return true;
+}
+
+int QPinyinFrame::get_hanzi_mark(int ascii_mark)
 {
 	int unicode = 0;	
 	switch(ascii_mark){
@@ -500,6 +523,12 @@ bool QPinyinFrame::send_hanzi_mark(int ascii_mark)
 			unicode = 0xff5e;
 			break;
 	}
+	return unicode;
+}
+
+bool QPinyinFrame::send_hanzi_mark(int ascii_mark)
+{
+	int unicode = get_hanzi_mark(ascii_mark);
 	if(unicode!=0){
 		SendKey(unicode);
 		return true;
@@ -527,12 +556,16 @@ bool QPinyinFrame::GetKey(int u, int k/*,int m*/)/*int unicode, int keycode, int
 	bool bUpdate         = false;
 	bool bKeyProcessed   = true;
 	
-	if(send_hanzi_mark(u)){
+	int hanzi_mark = get_hanzi_mark(u);
+	if(hanzi_mark != 0){
+		if(m_ime_info.pinyin.size()>0){
+			commit_preedit();
+		}
+		SendKey(hanzi_mark);
 		return true;
 	}
 
         if( k >= '0' && k <= '9'){
-commit:
 		bUpdate=commit_selection(k);
 		if(!bUpdate){
 			bKeyProcessed=false;
@@ -549,13 +582,27 @@ input:
 		goto input;
 	}
 	else if(k == Qt::Key_Space){
-		if(m_ime_info.candidates_on_page>0){
-			k='1';
-			goto commit;
+		if(m_ime_info.pinyin.size()>0 &&
+		   m_ime_info.candidates_on_page>0 &&
+		   (m_ime_info.pinyin.size()>1 || strchr(m_ime_info.pinyin.c_str(),' '))){
+			bUpdate=commit_preedit();
+		}
+		else if(m_ime_info.pinyin.size()>0 && m_ime_info.pinyin[m_ime_info.pinyin.size()-1] != ' '){
+			m_ime_info.pinyin+=' ';
+			search();
+			bUpdate=true;
+		}
+		else if(m_ime_info.pinyin.size()>0){
+			bUpdate=commit_preedit();
 		}
 		else{
 			bKeyProcessed=false;
 		}
+	}
+	else if(k == Qt::Key_Return || k == Qt::Key_Enter){
+		bUpdate=commit_preedit();
+		if(!bUpdate)
+			bKeyProcessed=false;
 	}
 	else if(k == Qt::Key_Right||k == Qt::Key_Down){
 		if(!next_page()){
@@ -646,13 +693,13 @@ void QPinyinFrame::mouseReleaseEvent(QMouseEvent* m)
 
 	if(hit_test_helper(x,y,m_about_rect)){
 		//show about infomation
-		QMessageBox::information(this,"關於此軟體",
+		QMessageBox::information(this,"关于此软件",
                                          "MurphyTalk 拼音 "VERSION"<br><br>"
                                          "原版 By MurphyTalk<br>"
-										"現代修改版 By nekohashizuku2333333333<br>"
-					 "此軟體部分基於SCIM輸入法<br>"
+										"现代修改版 By nekohashizuku2333333333<br>"
+					 "此软件部分基于SCIM输入法<br>"
 					 "James Su(suzhe@tsinghua.org.cn) 作品<br><br>"
-					 "本軟體使用GPL授權<br>");
+					 "本软件使用GPL授权<br>");
 	}	
 	else if(hit_test_helper(x,y,m_leftbtn_rect)){
 		prev_page();		
