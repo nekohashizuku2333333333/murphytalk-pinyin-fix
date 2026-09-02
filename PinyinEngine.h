@@ -40,6 +40,9 @@ public:
 		return m_commit_pinyin_length;
 	}
 	unsigned int get_commit_pinyin_length(unsigned int index);
+	inline unsigned int get_phrase_candidate_count(){
+		return m_phrase_candidate_count;
+	}
 	inline unsigned int get_char_count(){
 		return m_chars.size();
 	}
@@ -66,6 +69,18 @@ public:
 	}
 	inline void clear_key(){
 		m_key.clear_key();
+		m_chars.clear();
+		m_phrases.clear();
+		m_offset_freq_pairs.clear();
+		m_initial_lookup=false;
+		m_partial_lookup=false;
+		m_mixed_candidates=false;
+		m_commit_pinyin_length=0;
+		m_mixed_char_commit_length=0;
+		m_phrase_candidate_count=0;
+		m_display_pinyin="";
+		m_raw_pinyin="";
+		m_has_pending_pinyin=false;
 	}
 private:
 	//PinyinKeyVector   m_keys;

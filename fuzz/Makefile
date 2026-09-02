@@ -3,7 +3,7 @@ REPO ?= ..
 OUT ?= fuzz_pinyin
 CXXFLAGS ?= -O2 -Wall -Wextra -DMURPHY_TEST -I$(CURDIR)/stubs -I$(REPO)
 FIXTURE_DIR ?= $(CURDIR)/fixtures
-IPK ?= $(REPO)/dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_tolerantparse.ipk
+IPK ?= $(REPO)/dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_clearstate.ipk
 
 FUZZ_SRCS = $(CURDIR)/fuzz_pinyin.cpp $(REPO)/PinyinEngine.cpp $(REPO)/scim/scim_pinyin.cpp $(REPO)/phrase/PinyinPhrase.cpp $(REPO)/public.cpp
 

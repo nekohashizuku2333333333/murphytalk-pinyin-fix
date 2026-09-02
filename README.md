@@ -398,14 +398,16 @@ debian-binary
 - 后来的 `qtopia232_retainrest` 包修复 `nima` 这类连续全拼在选择首音节单字后误清空剩余拼音的问题。
 - 后来的 `qtopia232_syllablefirst` 包修复 `wcao` 无候选和 `cong` 被误消费为 `c` 的问题：完整音节优先，无法完整解析时才退回首声母。
 - 后来的 `qtopia232_fallbackorder` 包修复 `hef` 误消费 `h`、`nma` 无候选的问题，把兜底顺序明确为首完整音节优先，其次首声母。
-- 最终的 `qtopia232_tolerantparse` 包把拼音切分改成容错回溯解析：原始预编辑串完整保留，候选栏显示最佳切分，解析失败不再触发自动上屏。
+- 后来的 `qtopia232_tolerantparse` 包把拼音切分改成容错回溯解析：原始预编辑串完整保留，候选栏显示最佳切分，解析失败不再触发自动上屏。
+- 后来的 `qtopia232_consumeclean` 包修复选字后剩余拼音重新搜索时的页状态残留：每次重新搜索都会同步清空当前页候选数和上一页候选数，避免出现正文已上屏、预编辑残留但候选窗口空白/脏页的状态。
+- 最终的 `qtopia232_clearstate` 包修复退格删空或重置输入法状态后，候选栏仍显示上一次 `m_engine.get_display_pinyin()` 的残留字母问题；`PinyinEngine::clear_key()` 现在会同时清空 key、候选、短语 offset、commit 长度、raw/display preedit 和 pending 标记。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_tolerantparse.ipk
+dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_clearstate.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -420,7 +422,7 @@ dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_tolerantparse.ipk
 校验：
 
 ```text
-SHA256: 786efc61be428826ed67625285b7cd93f31fbfc564c88f3bcc20f941cac34e99
+SHA256: fad0b00947dca56ab2695f7820bc38fa83204fdec77f81e79ca07306407e472f
 ```
 
 ## 验收建议

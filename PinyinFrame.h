@@ -106,6 +106,8 @@ private:
 	inline void search(){		
 		m_ime_info.candidates_count=m_engine.search(m_ime_info.pinyin.c_str());
 		m_ime_info.first_visible=0;
+		m_ime_info.candidates_on_page=0;
+		m_ime_info.candidates_on_prev_page=0;
 #ifdef X86
 		printf("%s,%d matched\n",m_ime_info.pinyin.c_str(),m_ime_info.candidates_count);
 #endif

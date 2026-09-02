@@ -224,6 +224,28 @@ static bool deterministic_invariant(PinyinEngine &engine,const std::string &inpu
 	return false;
 }
 
+static bool clear_invariant(PinyinEngine &engine,const std::string &input,
+			    const std::string &regression_path,std::set<std::string> &known,
+			    int &new_failures)
+{
+	(void)search_snapshot(engine,input);
+	engine.clear_key();
+	Snapshot s;
+	s.input = input;
+	s.raw = engine.get_raw_pinyin();
+	s.display = engine.get_display_pinyin();
+	s.candidates = engine.get_char_count() + engine.get_phrase_candidate_count();
+	s.pending = engine.has_pending_pinyin();
+	s.commit_count = 0;
+	s.elapsed_ms = 0;
+	if(s.raw.empty() && s.display.empty() && s.candidates == 0 && !s.pending)
+		return true;
+	print_fail("clear-state",s,"");
+	if(append_regression(regression_path,input,known))
+		new_failures++;
+	return false;
+}
+
 static bool expect_display(PinyinEngine &engine,const std::string &input,const std::string &expected,
 			   const std::string &regression_path,std::set<std::string> &known,
 			   int &new_failures)
@@ -282,6 +304,29 @@ static bool expect_phrase_contains(PinyinEngine &engine,const std::string &input
 		}
 	}
 	print_fail("phrase-required",s," needle=\"" + needle + "\"");
+	if(append_regression(regression_path,input,known))
+		new_failures++;
+	return false;
+}
+
+static bool expect_first_char_consumes(PinyinEngine &engine,const std::string &input,unsigned int expected,
+				       const std::string &regression_path,std::set<std::string> &known,
+				       int &new_failures)
+{
+	Snapshot s = search_snapshot(engine,input);
+	unsigned int index = engine.get_phrase_candidate_count();
+	if(index >= s.candidates){
+		print_fail("char-candidate-required",s,"");
+		if(append_regression(regression_path,input,known))
+			new_failures++;
+		return false;
+	}
+	unsigned int consumed = engine.get_commit_pinyin_length(index);
+	if(consumed == expected)
+		return true;
+	std::ostringstream extra;
+	extra << " expected_consumed=" << expected << " consumed=" << consumed;
+	print_fail("consume-length",s,extra.str());
 	if(append_regression(regression_path,input,known))
 		new_failures++;
 	return false;
@@ -354,6 +399,7 @@ int main(int argc,char **argv)
 		if(!prefix_invariant(engine,s,regression_path,known,new_failures,max_ms)) total_failures++;
 		if(!backspace_invariant(engine,s,regression_path,known,new_failures)) total_failures++;
 		if(!deterministic_invariant(engine,s,regression_path,known,new_failures)) total_failures++;
+		if(!clear_invariant(engine,s,regression_path,known,new_failures)) total_failures++;
 	}
 
 	const char *complete[] = {"a","e","o","ai","an","ang","ao","ei","en","eng","er","ou"};
@@ -371,12 +417,18 @@ int main(int argc,char **argv)
 	if(!expect_display(engine,"beij","bei j",regression_path,known,new_failures)) total_failures++;
 	if(!expect_display(engine,"nihaoshijie","ni hao shi jie",regression_path,known,new_failures)) total_failures++;
 	if(!expect_phrase_contains(engine,"hefei","合肥",regression_path,known,new_failures)) total_failures++;
+	if(!expect_first_char_consumes(engine,"hef",2,regression_path,known,new_failures)) total_failures++;
+	if(!expect_first_char_consumes(engine,"nma",1,regression_path,known,new_failures)) total_failures++;
+	if(!expect_first_char_consumes(engine,"nima",2,regression_path,known,new_failures)) total_failures++;
+	if(!expect_first_char_consumes(engine,"cong",4,regression_path,known,new_failures)) total_failures++;
+	if(!expect_first_char_consumes(engine,"wcao",1,regression_path,known,new_failures)) total_failures++;
 
 	for(int i=0;i<rounds;i++){
 		std::string s = rand_input();
 		if(!base_invariants(engine,s,regression_path,known,new_failures,max_ms)) total_failures++;
 		if(!prefix_invariant(engine,s,regression_path,known,new_failures,max_ms)) total_failures++;
 		if(!deterministic_invariant(engine,s,regression_path,known,new_failures)) total_failures++;
+		if(!clear_invariant(engine,s,regression_path,known,new_failures)) total_failures++;
 	}
 
 	std::cout << "cases=" << (rounds + (int)(sizeof(fixed)/sizeof(fixed[0])))
