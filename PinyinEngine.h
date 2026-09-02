@@ -43,6 +43,9 @@ public:
 	inline unsigned int get_char_count(){
 		return m_chars.size();
 	}
+	inline String get_display_pinyin(){
+		return m_display_pinyin;
+	}
 	QChar get_char(unsigned int index);
 	QString get_phrase(unsigned int index);
 	bool is_phrase_candidate(unsigned int index);
@@ -62,6 +65,7 @@ private:
 	//PinyinKeyVector   m_keys;
 	PinyinPhraseKey   m_key;
 	bool append_first_syllable_chars(const char *pinyin,unsigned int pinyin_len);
+	bool fallback_first_syllable_chars(const char *pinyin,unsigned int pinyin_len);
 
 	//single hanzi
 	PinyinTable m_table;
@@ -73,6 +77,7 @@ private:
 	unsigned int m_commit_pinyin_length;
 	unsigned int m_mixed_char_commit_length;
 	unsigned int m_phrase_candidate_count;
+	String      m_display_pinyin;
 	
 	//phrase
        	PinyinPhraseTable               m_phrases_table;

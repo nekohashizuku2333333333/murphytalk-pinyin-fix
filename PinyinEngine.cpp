@@ -117,6 +117,32 @@ bool PinyinEngine::append_first_syllable_chars(const char *pinyin,unsigned int p
 	return true;
 }
 
+bool PinyinEngine::fallback_first_syllable_chars(const char *pinyin,unsigned int pinyin_len)
+{
+	m_chars.clear();
+	if(!append_first_syllable_chars(pinyin,pinyin_len))
+		return false;
+
+	m_key.clear_key();
+	m_initial_lookup = true;
+	m_commit_pinyin_length = m_mixed_char_commit_length;
+	return true;
+}
+
+static bool find_first_initial_chars(PinyinTable &table,CharVector &chars,
+				     const char *pinyin,unsigned int pinyin_len)
+{
+	if(pinyin_len <= 1)
+		return false;
+
+	PinyinInitial initial = get_initial_from_letter(pinyin[0]);
+	if(initial == SCIM_PINYIN_ZeroInitial)
+		return false;
+
+	chars.clear();
+	return table.find_chars_by_initial(chars,initial) > 0;
+}
+
 static void collect_pinyin_splits(const char *pinyin,unsigned int pinyin_len,
 				  unsigned int pos,PinyinKeyVector &current,
 				  std::vector<PinyinKeyVector> &splits)
@@ -255,6 +281,22 @@ unsigned int PinyinEngine::search(const char* pinyin)
 	}
 
 	if(pinyin_len > 1){
+		PinyinKey whole_key;
+		int whole_len = whole_key.set_key(scim_default_pinyin_validator,pinyin,pinyin_len);
+		if(whole_len == (int)pinyin_len && whole_key.get_final() != SCIM_PINYIN_ZeroFinal){
+			unsigned int char_count = m_table.find_chars(m_chars,whole_key);
+			if(char_count > 0){
+				char whole_pinyin[SCIM_PINYIN_KEY_MAXLEN+1];
+				memcpy(whole_pinyin,pinyin,pinyin_len);
+				whole_pinyin[pinyin_len]=0;
+				m_key.set_key(whole_pinyin);
+				m_commit_pinyin_length = pinyin_len;
+				return char_count;
+			}
+		}
+	}
+
+	if(pinyin_len > 1){
 		std::vector<PinyinKeyVector> splits;
 		collect_pinyin_splits(pinyin,pinyin_len,splits);
 		if(splits.size() > 0){
@@ -360,6 +402,16 @@ unsigned int PinyinEngine::search(const char* pinyin)
 
 	m_key.set_key(pinyin);
 
+	if(!m_key.isValid()){
+		if(find_first_initial_chars(m_table,m_chars,pinyin,pinyin_len)){
+			m_key.clear_key();
+			m_initial_lookup = true;
+			m_commit_pinyin_length = 1;
+			return m_chars.size();
+		}
+		return 0;
+	}
+
 	if(isPhrase()){
 		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
 		m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
@@ -383,11 +435,30 @@ unsigned int PinyinEngine::search(const char* pinyin)
 					return char_count;
 				}
 			}
+			if(fallback_first_syllable_chars(pinyin,pinyin_len)){
+				return m_chars.size();
+			}
+			if(find_first_initial_chars(m_table,m_chars,pinyin,pinyin_len)){
+				m_key.clear_key();
+				m_initial_lookup = true;
+				m_commit_pinyin_length = 1;
+				return m_chars.size();
+			}
 		}
 		return count;
 	}
 	else{
-		return m_table.find_chars(m_chars,m_key.get_key_by_index(0));
+		unsigned int char_count=m_table.find_chars(m_chars,m_key.get_key_by_index(0));
+		if(char_count == 0 && fallback_first_syllable_chars(pinyin,pinyin_len)){
+			return m_chars.size();
+		}
+		if(char_count == 0 && find_first_initial_chars(m_table,m_chars,pinyin,pinyin_len)){
+			m_key.clear_key();
+			m_initial_lookup = true;
+			m_commit_pinyin_length = 1;
+			return m_chars.size();
+		}
+		return char_count;
 	}
 }
 
