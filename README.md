@@ -470,38 +470,42 @@ SHA256: 786efc61be428826ed67625285b7cd93f31fbfc564c88f3bcc20f941cac34e99
 新增了不依赖 Qtopia UI 的解析/查词 fuzz harness：
 
 ```sh
-make -f tests/Makefile
-./tests/fuzz_pinyin scim/pinyin_table.txt "" 20000 tests/fuzz_regressions.txt
+make -f tests/Makefile fuzz
 ```
 
-测试程序直接链接 `PinyinEngine.cpp`、`scim/scim_pinyin.cpp`、`phrase/PinyinPhrase.cpp` 和 `public.cpp`，并通过 `tests/stubs/qstring.h` 提供最小 `QString/QChar` stub，因此不需要 Qtopia 窗口系统。
+测试程序直接链接 `PinyinEngine.cpp`、`scim/scim_pinyin.cpp`、`phrase/PinyinPhrase.cpp` 和 `public.cpp`，并通过 `tests/stubs/qstring.h` 提供最小 `QString/QChar` stub，因此不需要 Qtopia 窗口系统。`tests/Makefile` 会从最终 IPK 解出 `murphytalk_phrase.dat` 和 `murphytalk_phrase_idx.txt` 到 `tests/fixtures/`，并在 `MURPHY_TEST_PHRASE_FILE` 中把测试词库路径传给短语表；真实 Qtopia 构建不受影响。
 
 覆盖内容：
 
-- 固定用例：`hef`、`nma`、`xian`、`beij`、`nihaoshijie`、`zhzh`、`ng`、`v`。
+- 固定用例覆盖单独零声母、单字母/声母、`hef` 家族、`nma` 家族、`xian`/`jinan` 等边界歧义、隔音符、`lv/nv` 与 `lu/nu`、恶意输入和长串性能用例。
 - 随机用例：随机拼接合法音节、任意前缀、声母、单字母和隔音符，长度 1 到 12。
 - 不变量：
   - `get_raw_pinyin()` 必须与原始输入逐字符一致。
   - 每个输入要么有候选，要么被测试明确视为待定/不完整。
   - 解析和查词阶段不触发任何 commit。
+  - 每个用例的每一个前缀都必须满足上述条件。
+  - 退格回环后得到的状态必须与直接输入对应前缀完全一致。
+  - 同一输入连续解析两次必须得到同样的 raw、display、候选数、pending 和首短语。
+  - 每个输入的单次解析耗时不得超过 25 ms，覆盖 `nnnnnnnnnnnnnnnnnnnn` 这类防指数爆炸长串。
 - 固定展示断言：
   - `hef -> he f`
   - `nma -> n ma`
   - `xian -> xian`
   - `beij -> bei j`
   - `nihaoshijie -> ni hao shi jie`
+  - `hefei` 的短语候选必须包含“合肥”。
 
 违反不变量时，程序会打印输入串、切分显示、候选数、pending 状态和 commit 计数，并把新失败追加到 `tests/fuzz_regressions.txt`。
 
 最近一次验证结果：
 
 ```text
-FIXED input=hef display=he f candidates=100 pending=yes
+FIXED input=hef display=he f candidates=103 pending=yes
 FIXED input=nma display=n ma candidates=485 pending=no
-FIXED input=xian display=xian candidates=200 pending=no
-FIXED input=beij display=bei j candidates=70 pending=yes
+FIXED input=xian display=xian candidates=202 pending=no
+FIXED input=beij display=bei j candidates=76 pending=yes
 FIXED input=nihaoshijie display=ni hao shi jie candidates=80 pending=no
-cases=20008 failures=0 new_failures=0 regression_file=tests/fuzz_regressions.txt
+cases=20103 failures=0 new_failures=0 max_ms=25 regression_file=tests/fuzz_regressions.txt
 ```
 
 连续两轮 fuzz 均为 `failures=0`、`new_failures=0`；最终失败集合为空，`tests/fuzz_regressions.txt` 只保留说明注释。

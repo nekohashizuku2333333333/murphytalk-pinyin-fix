@@ -25,6 +25,7 @@
 #include "../public.h"
 
 #include <algorithm>
+#include <stdlib.h>
 #include <string.h>
 
 static PinyinInitial initial_from_letter(char c)
@@ -172,6 +173,16 @@ static const char murphutalk_Phrase_file         [] =
 "/home/zaurus/.murphytalk/murphytalk_phrase.dat";
 #endif
 
+static const char *get_phrase_file()
+{
+#ifdef MURPHY_TEST
+	const char *path = getenv("MURPHY_TEST_PHRASE_FILE");
+	if(path && path[0])
+		return path;
+#endif
+	return murphutalk_Phrase_file;
+}
+
 
 
 PinyinPhraseTable::PinyinPhraseTable(const char* indexfile)
@@ -193,7 +204,7 @@ bool PinyinPhraseTable::load_index(const char* indexfile)
 
 bool PinyinPhraseTable::save_index(const char* indexfile)
 {
-	std::fstream fs(murphutalk_Phrase_file,std::ios::in|std::ios::out);
+	std::fstream fs(get_phrase_file(),std::ios::in|std::ios::out);
 	if (!fs) return false;
 
 	printX86("updating phrase dat file for frequencies ...\n");
@@ -345,7 +356,7 @@ unsigned int PinyinPhraseTable::find_phrases(PhraseOffsetFrequencyPairVector& ph
 unsigned int PinyinPhraseTable::get_phrases_by_offsets(PhraseOffsetFrequencyPairVector& phrases_pair,
 						       PhraseStringVector& strs)
 {
-	std::ifstream in(murphutalk_Phrase_file);
+	std::ifstream in(get_phrase_file());
 	if(!in){
 		return 0;
 	}
@@ -431,7 +442,7 @@ bool PinyinPhraseTable::append_phrase(PhraseString& str,const char* pinyin)
 	}
 
 	//append phrase to phrase lib file
-	std::ofstream out(murphutalk_Phrase_file,std::ios::app|std::ios::out);
+	std::ofstream out(get_phrase_file(),std::ios::app|std::ios::out);
 	if(!out){
 		return false;
 	}

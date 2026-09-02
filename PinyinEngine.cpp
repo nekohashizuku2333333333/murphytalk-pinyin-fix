@@ -409,7 +409,9 @@ PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 
 PinyinEngine::~PinyinEngine()
 {
+#ifndef MURPHY_TEST
 	save_table();
+#endif
 }
 
 unsigned int PinyinEngine::search(const char* pinyin)

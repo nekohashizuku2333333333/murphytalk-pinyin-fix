@@ -29,7 +29,7 @@
 #include <vector>
 #include <algorithm>
 
-#ifndef X86
+#if !defined(X86) && !defined(MURPHY_TEST)
 #include <algo.h>
 #endif
 

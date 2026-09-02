@@ -23,7 +23,7 @@
 
 #include <string>
 
-#ifdef X86
+#if defined(X86) && !defined(MURPHY_TEST)
 #define printX86(fmt,args...)       printf(fmt,## args)
 #else
 #define printX86(fmt,args...)
