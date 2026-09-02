@@ -470,10 +470,11 @@ SHA256: 786efc61be428826ed67625285b7cd93f31fbfc564c88f3bcc20f941cac34e99
 新增了不依赖 Qtopia UI 的解析/查词 fuzz harness：
 
 ```sh
-make -f tests/Makefile fuzz
+cd fuzz
+make fuzz
 ```
 
-测试程序直接链接 `PinyinEngine.cpp`、`scim/scim_pinyin.cpp`、`phrase/PinyinPhrase.cpp` 和 `public.cpp`，并通过 `tests/stubs/qstring.h` 提供最小 `QString/QChar` stub，因此不需要 Qtopia 窗口系统。`tests/Makefile` 会从最终 IPK 解出 `murphytalk_phrase.dat` 和 `murphytalk_phrase_idx.txt` 到 `tests/fixtures/`，并在 `MURPHY_TEST_PHRASE_FILE` 中把测试词库路径传给短语表；真实 Qtopia 构建不受影响。
+测试工具不放在项目正常源码/打包目录中，当前位于 `fuzz/`。它直接链接上级目录中的 `PinyinEngine.cpp`、`scim/scim_pinyin.cpp`、`phrase/PinyinPhrase.cpp` 和 `public.cpp`，并通过 `fuzz/stubs/qstring.h` 提供最小 `QString/QChar` stub，因此不需要 Qtopia 窗口系统。`fuzz/Makefile` 会从最终 IPK 解出 `murphytalk_phrase.dat` 和 `murphytalk_phrase_idx.txt` 到 `fuzz/fixtures/`，并在 `MURPHY_TEST_PHRASE_FILE` 中把测试词库路径传给短语表；真实 Qtopia 构建不受影响。
 
 覆盖内容：
 
@@ -495,7 +496,7 @@ make -f tests/Makefile fuzz
   - `nihaoshijie -> ni hao shi jie`
   - `hefei` 的短语候选必须包含“合肥”。
 
-违反不变量时，程序会打印输入串、切分显示、候选数、pending 状态和 commit 计数，并把新失败追加到 `tests/fuzz_regressions.txt`。
+违反不变量时，程序会打印输入串、切分显示、候选数、pending 状态和 commit 计数，并把新失败追加到 `fuzz/fuzz_regressions.txt`。
 
 最近一次验证结果：
 
@@ -505,10 +506,10 @@ FIXED input=nma display=n ma candidates=485 pending=no
 FIXED input=xian display=xian candidates=202 pending=no
 FIXED input=beij display=bei j candidates=76 pending=yes
 FIXED input=nihaoshijie display=ni hao shi jie candidates=80 pending=no
-cases=20103 failures=0 new_failures=0 max_ms=25 regression_file=tests/fuzz_regressions.txt
+cases=20103 failures=0 new_failures=0 max_ms=25 regression_file=/home/flan/Documents/Workdir/other/murphytalk-pinyin-fix/fuzz/fuzz_regressions.txt
 ```
 
-连续两轮 fuzz 均为 `failures=0`、`new_failures=0`；最终失败集合为空，`tests/fuzz_regressions.txt` 只保留说明注释。
+连续两轮 fuzz 均为 `failures=0`、`new_failures=0`；最终失败集合为空，`fuzz/fuzz_regressions.txt` 只保留说明注释。
 
 已做的远端构建验证：
 
