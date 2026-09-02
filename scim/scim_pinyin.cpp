@@ -1180,6 +1180,44 @@ PinyinTable::find_chars_with_frequencies (std::vector <CharFrequencyPair> &vec, 
 	return vec.size ();
 }
 
+int
+PinyinTable::find_chars_by_initial (std::vector <ucs4_t> &vec, PinyinInitial initial) const
+{
+	std::vector<CharFrequencyPair> all;
+
+	vec.clear ();
+
+	find_chars_by_initial_with_frequencies (all, initial);
+
+	for (std::vector<CharFrequencyPair>::const_iterator i = all.begin ();
+			i != all.end (); ++i)
+		vec.push_back (i->first);
+
+	return vec.size ();
+}
+
+int
+PinyinTable::find_chars_by_initial_with_frequencies (std::vector <CharFrequencyPair> &vec, PinyinInitial initial) const
+{
+	vec.clear ();
+
+	if (initial == SCIM_PINYIN_ZeroInitial)
+		return 0;
+
+	for (PinyinEntryVector::const_iterator i = m_table.begin (); i!= m_table.end (); i++) {
+		if (i->get_key ().get_initial () == initial)
+			i->get_all_chars_with_frequencies (vec);
+	}
+
+	if (!vec.size ()) return 0;
+
+	std::sort (vec.begin (), vec.end (), CharFrequencyPairGreaterThanByCharAndFrequency ());
+	vec.erase (std::unique (vec.begin (), vec.end (), CharFrequencyPairEqualToByChar ()), vec.end ());
+	std::sort (vec.begin (), vec.end (), CharFrequencyPairGreaterThanByFrequency ());
+
+	return vec.size ();
+}
+
 void
 PinyinTable::erase (ucs4_t hz, const char *key)
 {

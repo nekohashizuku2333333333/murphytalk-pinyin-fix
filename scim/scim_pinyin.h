@@ -1050,6 +1050,8 @@ public:
 	*/
 	int find_chars (std::vector<ucs4_t> &vec, PinyinKey key) const;
 	int find_chars_with_frequencies (std::vector<CharFrequencyPair> &vec, PinyinKey key) const;
+	int find_chars_by_initial (std::vector<ucs4_t> &vec, PinyinInitial initial) const;
+	int find_chars_by_initial_with_frequencies (std::vector<CharFrequencyPair> &vec, PinyinInitial initial) const;
 
 	int find_keys (PinyinKeyVector &vec, ucs4_t code);
 

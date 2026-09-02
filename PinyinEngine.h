@@ -36,6 +36,9 @@ public:
 	~PinyinEngine();	
 
 	unsigned int search(const char* pinyin);
+	inline unsigned int get_commit_pinyin_length(){
+		return m_commit_pinyin_length;
+	}
 	inline unsigned int get_char_count(){
 		return m_chars.size();
 	}
@@ -61,6 +64,9 @@ private:
 	PinyinTable m_table;
 	CharVector  m_chars;
 	String      m_table_filename;
+	bool        m_initial_lookup;
+	bool        m_partial_lookup;
+	unsigned int m_commit_pinyin_length;
 	
 	//phrase
        	PinyinPhraseTable               m_phrases_table;

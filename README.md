@@ -70,13 +70,16 @@ if(send_hanzi_mark(u)){
 
 原输入法已经支持完整拼音短语，例如 `nihao` 查询 `ni hao`。本分支新增简拼短语查询，例如：
 
+- `w`、`q`、`n` 这类单字母声母会联想该声母下的单字候选，例如 `w` 可出现“我、为、文、无、问”等。
 - `nh` 可以匹配 `ni hao`，候选中可出现“你好”。
 - `zg` 可以匹配 `zhong guo`，候选中可出现“中国”。
 - `xj`、`xx`、`gq` 等多字母简拼也会按“每个字母代表一个音节声母”的方式查询短语。
 
 实现方式：
 
+- 新增 `PinyinTable::find_chars_by_initial()`，用于单字母声母的单字联想。
 - 新增 `PinyinPhraseKey::set_initials_key()`。
+- 当输入长度为 1 且是合法声母时，搜索层先汇总词表中该声母下所有完整拼音的单字候选。
 - 当输入长度大于 1 且全部可作为声母时，搜索层先把它解析成一组“声母 + 空韵母”的短语键。
 - 短语比较器原本已经支持空韵母作为通配符，本分支继续利用这个机制匹配完整拼音词条。
 - 补充 `z/c/s` 与 `zh/ch/sh` 的声母兼容，因此 `zg` 能匹配 `zhongguo`，`cs` 能匹配 `chusheng` 等。
@@ -85,6 +88,8 @@ if(send_hanzi_mark(u)){
 涉及文件：
 
 - `PinyinEngine.cpp`
+- `scim/scim_pinyin.cpp`
+- `scim/scim_pinyin.h`
 - `phrase/PinyinPhrase.cpp`
 - `phrase/PinyinPhrase.h`
 
@@ -312,14 +317,15 @@ debian-binary
 - 后来的 `qt2abi` 包改用 Qt2 头文件和 `moc`，但 Qt/E 2.3.7 仍比这套 Sharp `libqte.so.2` 新，会产生不匹配的 metaobject 符号。
 - 最终必须使用 Qt/E 2.3.2，并加 `-DQT_NO_PROPERTIES -DQT_NO_DRAGANDDROP`，否则会分别多出不匹配的 metaobject 签名和 drag/drop QWidget 虚函数。
 - 源码里不要直接引用全局 `qwsServer` 对象；旧包使用的是 `QWSServer::setKeyboardFilter()` 和 `QWSServer::sendKeyEvent()` 静态函数。目标库导出了静态函数，但不应要求插件解析 `qwsServer` 全局对象。
-- 最终的 `qtopia232` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so。
+- 后来的 `qtopia232` 包解决了插件加载问题，但单字母声母仍按完整拼音查表，`w/q/n` 这类输入没有候选。
+- 最终的 `qtopia232_initial` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so，并加入单声母联想查询。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232.ipk
+dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232_initial.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -334,7 +340,7 @@ dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232.ipk
 校验：
 
 ```text
-SHA256: 54a9dd2ebecf5db4af1a53dcb8a372b01249c0b587ab8271ac1337346c33e0ed
+SHA256: d520a461211c40e683966ce6aed467ce0f8efea096a2de73e8ef793f256bdd6d
 ```
 
 ## 验收建议
@@ -344,8 +350,9 @@ SHA256: 54a9dd2ebecf5db4af1a53dcb8a372b01249c0b587ab8271ac1337346c33e0ed
 1. 单按 `Shift` 不再进入造词模式。
 2. 在中文模式下输入 `, . ; : ? ! < > ( ) [ ] { } \ ~`，应得到上表中的中文标点。
 3. 输入 `nihao`，应仍能按完整拼音查到“你好”等词。
-4. 输入 `nh`，应能按简拼查到“你好”等 `n h` 声母短语。
-5. 输入 `zg`，应能匹配 `zhongguo` 这类 `zh g` 词条。
+4. 输入 `w`，应能出现“我、为、文、无、问”等单声母联想候选。
+5. 输入 `nh`，应能按简拼查到“你好”等 `n h` 声母短语。
+6. 输入 `zg`，应能匹配 `zhongguo` 这类 `zh g` 词条。
 
 ## 本地验证记录
 
@@ -354,6 +361,9 @@ SHA256: 54a9dd2ebecf5db4af1a53dcb8a372b01249c0b587ab8271ac1337346c33e0ed
 - `scim/scim_pinyin.cpp` 可单独通过现代 GCC 语法编译。
 - `phrase/PinyinPhrase.cpp` 可单独通过现代 GCC 语法编译。
 - 临时测试确认：
+  - `w` 可从单字表汇总出 656 个单声母候选，前几个候选为“我、为、文、无、问、外、位、物”。
+  - `q` 可从单字表汇总出 1075 个单声母候选。
+  - `n` 可从单字表汇总出 485 个单声母候选。
   - `nh` 查询键与 `ni hao` 短语键在短语比较器中等价。
   - `zg` 查询键与 `zhong guo` 短语键在短语比较器中等价。
 

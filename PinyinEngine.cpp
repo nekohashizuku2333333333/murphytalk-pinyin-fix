@@ -26,8 +26,36 @@
 
 #include <string.h>
 
+static PinyinInitial get_initial_from_letter(char c)
+{
+	switch(c){
+		case 'b': return SCIM_PINYIN_Bo;
+		case 'c': return SCIM_PINYIN_Ci;
+		case 'd': return SCIM_PINYIN_De;
+		case 'f': return SCIM_PINYIN_Fo;
+		case 'g': return SCIM_PINYIN_Ge;
+		case 'h': return SCIM_PINYIN_He;
+		case 'j': return SCIM_PINYIN_Ji;
+		case 'k': return SCIM_PINYIN_Ke;
+		case 'l': return SCIM_PINYIN_Le;
+		case 'm': return SCIM_PINYIN_Mo;
+		case 'n': return SCIM_PINYIN_Ne;
+		case 'p': return SCIM_PINYIN_Po;
+		case 'q': return SCIM_PINYIN_Qi;
+		case 'r': return SCIM_PINYIN_Ri;
+		case 's': return SCIM_PINYIN_Si;
+		case 't': return SCIM_PINYIN_Te;
+		case 'w': return SCIM_PINYIN_Wo;
+		case 'x': return SCIM_PINYIN_Xi;
+		case 'y': return SCIM_PINYIN_Yi;
+		case 'z': return SCIM_PINYIN_Zi;
+		default: return SCIM_PINYIN_ZeroInitial;
+	}
+}
+
 PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
+	 m_initial_lookup(false),
 	 m_phrases_table(phrase_index_file),m_phrase_idx_filename(phrase_index_file)
 {
 }
@@ -40,6 +68,16 @@ PinyinEngine::~PinyinEngine()
 unsigned int PinyinEngine::search(const char* pinyin)
 {
 	unsigned int pinyin_len = pinyin ? strlen(pinyin) : 0;
+	m_initial_lookup = false;
+
+	if(pinyin_len == 1){
+		PinyinInitial initial = get_initial_from_letter(pinyin[0]);
+		if(initial != SCIM_PINYIN_ZeroInitial){
+			m_key.clear_key();
+			m_initial_lookup = true;
+			return m_table.find_chars_by_initial(m_chars,initial);
+		}
+	}
 
 	if(pinyin_len > 1 && m_key.set_initials_key(pinyin)){
 		unsigned int count=m_phrases_table.find_phrases(m_offset_freq_pairs,m_key);
@@ -79,6 +117,9 @@ QString PinyinEngine::get_phrase(unsigned int index)
 
 void PinyinEngine::hit(unsigned int index)
 {
+	if(m_initial_lookup)
+		return;
+
 	if(isPhrase()){
 		m_phrases_table.set_frequency(m_offset_freq_pairs[index].first,
 					      m_offset_freq_pairs[index].second+1);
