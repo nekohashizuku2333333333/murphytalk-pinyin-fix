@@ -7,14 +7,11 @@ public:
 	class KeyboardFilter
 	{
 	public:
-		virtual ~KeyboardFilter() {}
 		virtual bool filter(int unicode, int keycode, int modifiers, bool isPress, bool autoRepeat) = 0;
 	};
 
-	void setKeyboardFilter(KeyboardFilter *);
-	void sendKeyEvent(int unicode, int keycode, int modifiers, bool isPress, bool autoRepeat);
+	static void setKeyboardFilter(KeyboardFilter *);
+	static void sendKeyEvent(int unicode, int keycode, int modifiers, bool isPress, bool autoRepeat);
 };
-
-extern QWSServer *qwsServer;
 
 #endif

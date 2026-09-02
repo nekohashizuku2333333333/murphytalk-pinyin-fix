@@ -124,7 +124,7 @@ QPinyinFrame::QPinyinFrame(QWidget* parent, const char* name, WFlags f) :
 {
 	(new QHBoxLayout(this))->setAutoAdd(TRUE);
 	QPEApplication::grabKeyboard(); 
-	qwsServer->setKeyboardFilter (this);
+	QWSServer::setKeyboardFilter (this);
 
 	Config config(config_file);
 
@@ -323,7 +323,10 @@ void QPinyinFrame::paintEvent(QPaintEvent * e)
 	QRect hanzi;
 	painter.setPen(penText);
 	for(unsigned int i=m_ime_info.first_visible,xx=x,yy=Y-3;m_ime_info.candidates_on_page<10&&i<m_ime_info.candidates_count;i++){
-		str.sprintf("%d.",(i-m_ime_info.first_visible+1)%10);//1. 2. ... 9. 0.
+		unsigned int label = i-m_ime_info.first_visible+1;
+		if(label == 10)
+			label = 0;
+		str.sprintf("%d.",label);//1. 2. ... 9. 0.
      		if(m_engine.isPhrase()){
 			str+=get_phrase(i);
 		}
@@ -406,7 +409,7 @@ int QPinyinFrame::get_charunicode(unsigned int nIndexOnPage)
 bool QPinyinFrame::commit_selection(int k)
 {
 	bool bUpdate = false;
-	unsigned int index = ((k-'0')+9)%10;
+	unsigned int index = (k == '0') ? 9 : (k-'1');
 	if(index<m_ime_info.candidates_on_page){
 		m_engine.hit(m_ime_info.first_visible+index);
 		if(m_engine.isPhrase()){
@@ -605,7 +608,7 @@ void QPinyinFrame::show()
 {
 	QFrame::show ();
 	QPEApplication::grabKeyboard();
-	qwsServer->setKeyboardFilter (this);
+	QWSServer::setKeyboardFilter (this);
 }
 
 void QPinyinFrame::hide()
@@ -614,7 +617,7 @@ void QPinyinFrame::hide()
 	QPEApplication::ungrabKeyboard(); 
 	resetState();
 	m_engine.save_table();	
-	//qwsServer->setKeyboardFilter (NULL);
+	//QWSServer::setKeyboardFilter (NULL);
 }
     
 bool hit_test_helper(int x,int y,QRect& rect)
@@ -669,8 +672,8 @@ void QPinyinFrame::keyPressEvent(QKeyEvent*)
 
 void QPinyinFrame::SendKey(int u , int c)
 {
-	qwsServer->sendKeyEvent ( u , c, 0, true, false);
-	qwsServer->sendKeyEvent ( u , c, 0, false, false);
+	QWSServer::sendKeyEvent ( u , c, 0, true, false);
+	QWSServer::sendKeyEvent ( u , c, 0, false, false);
 }
 /*
  * Revision history

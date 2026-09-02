@@ -116,7 +116,8 @@ if(send_hanzi_mark(u)){
 - `QWSServer::KeyboardFilter`
 - `QWSServer::setKeyboardFilter()`
 - `QWSServer::sendKeyEvent()`
-- 全局 `qwsServer`
+
+注意：最终给 Zaurus/Qtopia 1.x 构建时，应优先使用 Qt/E 2.x 自带的真实 `qwindowsystem_qws.h`。本仓库的兼容声明只用于缺头文件时的补洞，不应替代完整 Qt/E 2.x 头文件集。
 
 ## Fn+Space / abc 输入法切换
 
@@ -130,7 +131,7 @@ if(send_hanzi_mark(u)){
 
 ### 推荐构建工具链
 
-必须使用与目标 Qtopia 库 ABI 匹配的老工具链。已验证可用的是远端环境：
+必须使用与目标 Qtopia 库 ABI 匹配的老工具链和老 Qt 头文件。已验证可用的是远端环境：
 
 ```sh
 sh /opt/cross/arm/3.4.6-xscale-softvfp-akita/runsdk.sh
@@ -144,12 +145,31 @@ arm-linux-g++ --version
 # 2.95.3
 ```
 
+同时必须使用与目标 `libqte.so.2` 匹配的 Qt/E 2.3.2 头文件和 Qt2 `moc`。这次实际排查确认，单纯换成 GCC 2.95.3 还不够；如果继续使用 Qt 3.3.5 的头文件和 `moc`，插件仍会编出 Qt3 形态的未解析符号，Qtopia 启动时可能直接跳过该输入法。
+
 不要用 `armv5tel-cacko-linux-g++ 3.4.6` 来链接本仓库 `lib/libqpe.so`、`lib/libqte.so`。原因：
 
 - `libqpe.so` / `libqte.so` 使用 GCC 2.x 老 C++ ABI，符号形如 `__6QFrame...`。
 - GCC 3.4.6 会生成新 C++ ABI，符号形如 `_ZN6QFrame...`。
 - GCC 3.4.6 默认还会生成 `software FP, VFP` ELF flags，和旧库的 ARM flags `0x2` 不一致。
 - 即使用 linker 选项绕过 mismatch，生成的 so 也可能在真机加载失败。
+
+也不要使用 Qt 3.3.5 的头文件或 Qt3 `moc`。错误特征包括：
+
+```text
+U __6QFrameP7QWidgetPCcUi
+U create__7QWidgetUlbT2
+U QMetaObjectCleanUp...
+U contextMenuEvent__7QWidgetP17QContextMenuEvent
+U imComposeEvent__7QWidgetP8QIMEvent
+```
+
+正确的 Qt/E 2.3.2 构建应出现 Qt2 符号形态，例如：
+
+```text
+U __6QFrameP7QWidgetPCcUib
+U create__7QWidgetUibT2
+```
 
 兼容版本应满足：
 
@@ -181,9 +201,29 @@ make \
   LINK=arm-linux-g++ \
   AR='arm-linux-ar cqs' \
   QPEDIR=/path/to/qtopia-free-1.7.0 \
-  QTDIR=/opt/cross/arm/3.4.6-xscale-softvfp-akita/armv5tel-cacko-linux/qt \
-  INCPATH='-I. -I/path/to/qtopia-free-1.7.0/include -I/opt/cross/arm/3.4.6-xscale-softvfp-akita/armv5tel-cacko-linux/qt/include' \
-  LIBS='-L./lib -lqpe -lqte'
+  QTDIR=/tmp/qt-2.3.2 \
+  CXXFLAGS='-pipe -DQT_QWS_SL5XXX -DQT_QWS_CUSTOM -DQWS -DQT_NO_PROPERTIES -DQT_NO_DRAGANDDROP -fno-exceptions -fno-rtti -Wall -W -O2 -fPIC -DNO_DEBUG' \
+  INCPATH='-I. -I/path/to/qtopia-free-1.7.0/include -I/tmp/qt-2.3.2/include' \
+  LIBS='-L./lib -lqpe -lqte' \
+  MOC=/tmp/qt-2.3.2/src/moc/moc
+```
+
+如果 Qt/E 2.3.2 源码包里没有预编译 `moc`，可在构建机上先编宿主机版本：
+
+```sh
+cd /tmp/qt-2.3.2/src/moc
+make -f Makefile.in all \
+  SYSCONF_CXX=g++ \
+  SYSCONF_CC=gcc \
+  SYSCONF_LINK=g++ \
+  SYSCONF_CXXFLAGS='-O2' \
+  SYSCONF_CFLAGS='-O2' \
+  SYSCONF_LFLAGS='' \
+  SYSCONF_LIBS='' \
+  SYSCONF_LIBS_YACC='' \
+  SYSCONF_LIBS_QTAPP='' \
+  SYSCONF_CXXFLAGS_QT='' \
+  SYSCONF_CXXFLAGS_YACC=''
 ```
 
 `Makefile` 默认会生成 `DIST/murphypinyin.tar`，其中包含：
@@ -266,15 +306,20 @@ debian-binary
 - `control.tar.gz` 里不能放 `./CONTROL/control`。老包里是直接放 `./control`，应按这个格式保持兼容。
 - 主库名最好保持 `libmurphypinyin.so.0.03`，不要只使用 Makefile 默认生成的 `libmurphypinyin.so.0.0.2`。三个符号链接也应继续指向 `libmurphypinyin.so.0.03`。
 - 用 GCC 3.4.6 生成的 so 会出现新 C++ ABI 和 `software FP, VFP` 标记，不适合这里的 `libqpe.so` / `libqte.so`。必须用 GCC 2.95.3 重新编译。
+- 用 GCC 2.95.3 但搭配 Qt 3.3.5 头文件/Qt3 `moc` 仍然不行。它会生成旧 GCC ABI 但 Qt3 API 的符号，设备上的 Qt2 `libqte.so.2` 无法满足这些符号，结果就是安装后开机输入法列表不显示新插件。
 - 第一次兼容包 `murphytalk.pinyin_0.03_arm_jianpin_compat.ipk` 在设备端出现 `bad tar header skipping`，随后 `ipkg_install_file: ERROR unpacking data.tar.gz`。原因判断为 tar/gzip 元数据仍不够贴近旧包。
-- 最终的 `compat_fixed` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换 so；外层和内层 tar 都使用数字属主 `0/0`、1970 时间戳、老式 `tar.gz` 结构。
+- 后来的 `compat_fixed` 包虽然修正了外层格式，但仍因使用 Qt3 头文件/Qt3 `moc` 构建而无法被 Qtopia 正常加载。
+- 后来的 `qt2abi` 包改用 Qt2 头文件和 `moc`，但 Qt/E 2.3.7 仍比这套 Sharp `libqte.so.2` 新，会产生不匹配的 metaobject 符号。
+- 最终必须使用 Qt/E 2.3.2，并加 `-DQT_NO_PROPERTIES -DQT_NO_DRAGANDDROP`，否则会分别多出不匹配的 metaobject 签名和 drag/drop QWidget 虚函数。
+- 源码里不要直接引用全局 `qwsServer` 对象；旧包使用的是 `QWSServer::setKeyboardFilter()` 和 `QWSServer::sendKeyEvent()` 静态函数。目标库导出了静态函数，但不应要求插件解析 `qwsServer` 全局对象。
+- 最终的 `qtopia232` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换用 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` + Sharp 裁剪宏重新编译的 so。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-murphytalk.pinyin_0.03_arm_jianpin_compat_fixed.ipk
+dist/murphytalk.pinyin_0.03_arm_jianpin_qtopia232.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -283,13 +328,13 @@ murphytalk.pinyin_0.03_arm_jianpin_compat_fixed.ipk
 - 保留 `control.tar.gz` 内的 `./control`。
 - 保留 `libmurphypinyin.so.0.03` 主库名和符号链接布局。
 - 保留旧包内的词表、词库、配置和路径结构。
-- 只替换为 GCC 2.95.3 重新编译的新 `libmurphypinyin.so.0.03`。
-- 外层和内层 tar 条目使用更保守的 `0/0` 数字属主与 1970 时间戳，避免老 `ipkg` 报 `bad tar header skipping`。
+- 只替换为 GCC 2.95.3 + Qt/E 2.3.2 头文件 + Qt2 `moc` 重新编译的新 `libmurphypinyin.so.0.03`。
+- 外层仍是老式 gzip tar，不是现代 Debian `ar` ipk。
 
 校验：
 
 ```text
-SHA256: feb177d5e03ad1f3d2c9d77e44646451ca403cc23c9e2c08443074841b27ce6d
+SHA256: 54a9dd2ebecf5db4af1a53dcb8a372b01249c0b587ab8271ac1337346c33e0ed
 ```
 
 ## 验收建议
@@ -315,6 +360,7 @@ SHA256: feb177d5e03ad1f3d2c9d77e44646451ca403cc23c9e2c08443074841b27ce6d
 已做的远端构建验证：
 
 - 使用 GCC 2.95.3 成功交叉编译 ARM `libmurphypinyin.so`。
+- 使用 Qt/E 2.3.2 头文件、Qt2 `moc`、`QT_NO_PROPERTIES`、`QT_NO_DRAGANDDROP` 重新构建，避免 Qt3/Qt2 配置不一致导致的插件加载失败。
 - 生成的 so 与可安装旧包 ABI 风格一致：
   - ARM flags 为 `0x2`。
   - 依赖为 `libqpe.so.1`、`libqte.so.2`、`libm.so.6`、`libc.so.6`。
