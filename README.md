@@ -105,6 +105,19 @@ if(send_hanzi_mark(u)){
 - `scim/scim_pinyin.cpp`
 - `scim/scim_pinyin.h`
 
+### 5. Qtopia 私有头兼容声明
+
+部分 SDK 里没有 `qwindowsystem_qws.h`，但 `libqte.so` 实际导出了 `QWSServer` 相关符号。为让源码可以在这种 SDK 上编译，本仓库补了一个最小兼容声明头：
+
+- `qwindowsystem_qws.h`
+
+它只声明本输入法实际用到的接口：
+
+- `QWSServer::KeyboardFilter`
+- `QWSServer::setKeyboardFilter()`
+- `QWSServer::sendKeyEvent()`
+- 全局 `qwsServer`
+
 ## Fn+Space / abc 输入法切换
 
 `Fn+Space` 切换到 `abc` 的问题，目前判断主要是 Qtopia 系统输入法轮换行为，而不是 MurphyTalk 插件内部逻辑。
@@ -112,6 +125,172 @@ if(send_hanzi_mark(u)){
 源码里没有可靠的 `Fn+Space` 专用识别逻辑，也没有稳定的设备按键码信息。因此本分支暂时不在插件里硬拦截 `Fn+Space`，以免误吞正常按键。
 
 更稳的处理方向是在设备系统侧移除或禁用参与轮换的 `abc` 输入法插件，让 `Fn+Space` 不再轮到它。
+
+## 构建与打包格式
+
+### 推荐构建工具链
+
+必须使用与目标 Qtopia 库 ABI 匹配的老工具链。已验证可用的是远端环境：
+
+```sh
+sh /opt/cross/arm/3.4.6-xscale-softvfp-akita/runsdk.sh
+export PATH=/opt/cross/arm/2.95.3-2.15/bin:$PATH
+```
+
+推荐使用 GCC 2.95.3：
+
+```sh
+arm-linux-g++ --version
+# 2.95.3
+```
+
+不要用 `armv5tel-cacko-linux-g++ 3.4.6` 来链接本仓库 `lib/libqpe.so`、`lib/libqte.so`。原因：
+
+- `libqpe.so` / `libqte.so` 使用 GCC 2.x 老 C++ ABI，符号形如 `__6QFrame...`。
+- GCC 3.4.6 会生成新 C++ ABI，符号形如 `_ZN6QFrame...`。
+- GCC 3.4.6 默认还会生成 `software FP, VFP` ELF flags，和旧库的 ARM flags `0x2` 不一致。
+- 即使用 linker 选项绕过 mismatch，生成的 so 也可能在真机加载失败。
+
+兼容版本应满足：
+
+```sh
+readelf -h libmurphypinyin.so.0.03 | grep Flags
+# Flags: 0x2, GNU EABI
+
+readelf -d libmurphypinyin.so.0.03 | grep NEEDED
+# libqpe.so.1
+# libqte.so.2
+# libm.so.6
+# libc.so.6
+```
+
+不应额外依赖：
+
+- `libstdc++.so.6`
+- `libgcc_s.so.1`
+
+### 编译命令参考
+
+在远端构建目录中，使用本仓库附带的 `lib/libqpe.so`、`lib/libqte.so`：
+
+```sh
+make clean
+make \
+  CC=arm-linux-gcc \
+  CXX=arm-linux-g++ \
+  LINK=arm-linux-g++ \
+  AR='arm-linux-ar cqs' \
+  QPEDIR=/path/to/qtopia-free-1.7.0 \
+  QTDIR=/opt/cross/arm/3.4.6-xscale-softvfp-akita/armv5tel-cacko-linux/qt \
+  INCPATH='-I. -I/path/to/qtopia-free-1.7.0/include -I/opt/cross/arm/3.4.6-xscale-softvfp-akita/armv5tel-cacko-linux/qt/include' \
+  LIBS='-L./lib -lqpe -lqte'
+```
+
+`Makefile` 默认会生成 `DIST/murphypinyin.tar`，其中包含：
+
+```text
+libmurphypinyin.so
+libmurphypinyin.so.0
+libmurphypinyin.so.0.0
+libmurphypinyin.so.0.0.2
+```
+
+为了兼容原 0.03 包，最终打包时建议把实际 so 改名为：
+
+```text
+libmurphypinyin.so.0.03
+```
+
+并让三个符号链接都指向它：
+
+```text
+libmurphypinyin.so     -> libmurphypinyin.so.0.03
+libmurphypinyin.so.0   -> libmurphypinyin.so.0.03
+libmurphypinyin.so.0.0 -> libmurphypinyin.so.0.03
+```
+
+### 老 Zaurus ipk 外层格式
+
+Sharp Zaurus / 老 ipkg 可安装包不是现代 Debian `ar` 外层格式，而是 gzip 压缩的 tar：
+
+```text
+murphytalk.pinyin_0.03_arm_*.ipk
+└── tar.gz
+    ├── ./debian-binary
+    ├── ./control.tar.gz
+    └── ./data.tar.gz
+```
+
+其中：
+
+```text
+debian-binary
+```
+
+内容应为：
+
+```text
+2.0
+```
+
+`control.tar.gz` 内部应直接包含：
+
+```text
+./control
+```
+
+不要打成：
+
+```text
+./CONTROL/control
+```
+
+`data.tar.gz` 内部路径应类似：
+
+```text
+./etc/murphytalk.conf
+./home/zaurus/.murphytalk/pinyin_table.txt
+./home/zaurus/.murphytalk/murphytalk_phrase.dat
+./home/zaurus/.murphytalk/murphytalk_phrase_idx.txt
+./opt/Qtopia/plugins/inputmethods/libmurphypinyin.so
+./opt/Qtopia/plugins/inputmethods/libmurphypinyin.so.0
+./opt/Qtopia/plugins/inputmethods/libmurphypinyin.so.0.0
+./opt/Qtopia/plugins/inputmethods/libmurphypinyin.so.0.03
+```
+
+### 打包踩坑记录
+
+这次实际测试中遇到过几个失败包，经验如下：
+
+- 现代 Debian `ar` 外层 `.ipk` 不适合这台老 Zaurus/ipkg 环境。虽然桌面 Linux 会识别为 Debian binary package，但设备端老 `ipkg` 更接近原 MurphyTalk 包的 `tar.gz` 外层格式。
+- `control.tar.gz` 里不能放 `./CONTROL/control`。老包里是直接放 `./control`，应按这个格式保持兼容。
+- 主库名最好保持 `libmurphypinyin.so.0.03`，不要只使用 Makefile 默认生成的 `libmurphypinyin.so.0.0.2`。三个符号链接也应继续指向 `libmurphypinyin.so.0.03`。
+- 用 GCC 3.4.6 生成的 so 会出现新 C++ ABI 和 `software FP, VFP` 标记，不适合这里的 `libqpe.so` / `libqte.so`。必须用 GCC 2.95.3 重新编译。
+- 第一次兼容包 `murphytalk.pinyin_0.03_arm_jianpin_compat.ipk` 在设备端出现 `bad tar header skipping`，随后 `ipkg_install_file: ERROR unpacking data.tar.gz`。原因判断为 tar/gzip 元数据仍不够贴近旧包。
+- 最终的 `compat_fixed` 包采用更保守的方式：以可安装旧包为模板，复用旧 `control.tar.gz`，保留旧包数据结构，只替换 so；外层和内层 tar 都使用数字属主 `0/0`、1970 时间戳、老式 `tar.gz` 结构。
+
+### 可安装兼容包
+
+已生成的推荐测试包：
+
+```text
+murphytalk.pinyin_0.03_arm_jianpin_compat_fixed.ipk
+```
+
+该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
+
+- 保留老式外层 `tar.gz` ipk 格式。
+- 保留 `control.tar.gz` 内的 `./control`。
+- 保留 `libmurphypinyin.so.0.03` 主库名和符号链接布局。
+- 保留旧包内的词表、词库、配置和路径结构。
+- 只替换为 GCC 2.95.3 重新编译的新 `libmurphypinyin.so.0.03`。
+- 外层和内层 tar 条目使用更保守的 `0/0` 数字属主与 1970 时间戳，避免老 `ipkg` 报 `bad tar header skipping`。
+
+校验：
+
+```text
+SHA256: feb177d5e03ad1f3d2c9d77e44646451ca403cc23c9e2c08443074841b27ce6d
+```
 
 ## 验收建议
 
@@ -125,8 +304,6 @@ if(send_hanzi_mark(u)){
 
 ## 本地验证记录
 
-当前环境没有完整的老 Qtopia/Qt 构建链，因此没有在本机完成 ARM 插件或 `.ipk` 打包。
-
 已做的源码级验证：
 
 - `scim/scim_pinyin.cpp` 可单独通过现代 GCC 语法编译。
@@ -134,3 +311,12 @@ if(send_hanzi_mark(u)){
 - 临时测试确认：
   - `nh` 查询键与 `ni hao` 短语键在短语比较器中等价。
   - `zg` 查询键与 `zhong guo` 短语键在短语比较器中等价。
+
+已做的远端构建验证：
+
+- 使用 GCC 2.95.3 成功交叉编译 ARM `libmurphypinyin.so`。
+- 生成的 so 与可安装旧包 ABI 风格一致：
+  - ARM flags 为 `0x2`。
+  - 依赖为 `libqpe.so.1`、`libqte.so.2`、`libm.so.6`、`libc.so.6`。
+  - Qt/C++ 符号为 GCC 2.x 老 ABI。
+- 已按老 Zaurus/ipkg 外层 tar.gz 格式生成兼容 ipk。
