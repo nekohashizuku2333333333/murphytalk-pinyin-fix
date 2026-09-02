@@ -288,7 +288,7 @@ void QPinyinFrame::paintEvent(QPaintEvent * e)
 	}
 	//pinyin inputed by user
 	painter.setPen(penText);
-	painter.drawText(X,Y,QString(m_ime_info.pinyin.c_str()));
+	painter.drawText(X,Y,QString(m_engine.get_display_pinyin().c_str()));
 
 	//horizonal line which seperates pinyin and hanzi candidates
 	y+=rect.height()+2;

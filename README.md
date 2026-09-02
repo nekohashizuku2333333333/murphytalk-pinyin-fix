@@ -130,29 +130,36 @@ if(send_hanzi_mark(u)){
 
 注意：简拼能否直接出现某个整词，仍取决于词库里是否有对应短语。当前保留旧包词库，因此若旧词库没有“你好”，`nh` 或 `n hao` 不会凭空生成“你好”，但会回退到第一个音节/声母候选，保证不会空白卡住。
 
-### 3.1. 全拼分词、歧义切分和隔音符
+### 3.1. 容错全拼分词、简拼切分和隔音符
 
 音节表来源为 `scim/scim_pinyin.cpp` 内置的 `scim_pinyin_initials` 与 `scim_pinyin_finals`，并继续使用原 SCIM `PinyinKey::set_key()` 做合法性校验。
 
-新增的连续拼音切分逻辑在 `PinyinEngine.cpp` 中实现：
+新增的容错连续拼音切分逻辑在 `PinyinEngine.cpp` 中实现：
 
-- 对输入串做最长优先 DFS，按 `SCIM_PINYIN_KEY_MAXLEN` 从长到短尝试合法音节。
-- 一个连续串最多收集 16 种切分，避免老机器上输入超长串时拖慢。
+- 对输入串做带回溯的枚举，按 `SCIM_PINYIN_KEY_MAXLEN` 从长到短尝试合法完整音节，不再只保留贪心最长匹配的一条路径。
+- 除完整音节外，还接受单独声母以及 `zh/ch/sh` 这类未完成声母片段；串尾的不完整片段作为“待定输入”，串中的不完整片段按简拼处理。
+- 一个连续串最多收集 32 种切分，避免老机器上输入超长串时拖慢。
+- 每种切分会打分并排序：完整音节按覆盖字符数高分；串尾不完整片段轻微低于完整音节但不视为错误；串中的不完整片段降权，作为简拼候选来源。
+- 预编辑内部始终保留用户输入的原始串，不会因为解析失败丢字符；候选栏第一行显示最佳切分后的可读形式，例如 `hef` 显示为 `he f`。
+- 解析不了或接不上时不会自动上屏。上屏只由用户选择候选、按空格确认或按回车确认触发。
 - `xian` 这类歧义串会同时产生 `xian` 和 `xi an` 方向的候选；候选统一合并展示。
 - 用户输入 `'` 时作为强制音节边界，例如 `xi'an` 只能跨边界切为 `xi an`，不会把 `'` 两侧合成一个音节。
 - 相同短语 offset 会去重，避免不同切分命中同一短语时重复显示。
 
 排序融合策略：
 
-- 全拼精确切分先查；只要有全拼短语命中，就优先展示这些候选。
-- 全拼没有短语命中时，再进入混合简拼、纯声母简拼和原有单字回退。
-- 多个全拼切分命中的候选合并后仍按词库频率排序。
-- 简拼/混合命中天然低于全拼精确命中，不抢全拼候选首位。
+- 对最优和次优切分分别查词后合并候选；完整音节路径优先，简拼/不完整片段路径次之。
+- 多个切分命中的相同短语只显示一次，合并后继续按词库频率排序。
+- 如果词库没有整词候选，会回退到最佳切分的第一个可提交片段：完整首音节优先，其次首声母。
+- 选择追加在短语候选后面的首片段单字时，只消耗该片段长度，剩余原始拼音继续留在预编辑中重新搜索。
 
 连续混合简拼也已加入：
 
 - `bj` 会解析为 `b + j`。
 - `beij` 会解析为 `bei + j`。
+- `hef` 会解析为 `he + f`，先显示 `he` 的单字候选，选择后保留 `f`。
+- `nma` 会优先解析为 `n + ma`，同时也允许 `n + m + a` 方向参与候选。
+- `nihaoshijie` 会切为 `ni hao shi jie` 方向查词；词库缺整词时仍能回退到首音节逐字输入。
 - 完整音节保留精确匹配，单字母声母使用空韵母通配。
 - 对 `nm` 这类连续简拼，候选前面仍保留整词短语，例如“你们”；同时会把第一个声母 `n` 的单字候选追加在后面。选择后面的单字候选时只消耗第一个 `n`，剩余 `m` 会留在预编辑串里继续候选，便于逐字输入。
 
@@ -390,14 +397,15 @@ debian-binary
 - 后来的 `qtopia232_clearpreedit` 包修复退格删空预编辑拼音后候选字仍残留的问题。
 - 后来的 `qtopia232_retainrest` 包修复 `nima` 这类连续全拼在选择首音节单字后误清空剩余拼音的问题。
 - 后来的 `qtopia232_syllablefirst` 包修复 `wcao` 无候选和 `cong` 被误消费为 `c` 的问题：完整音节优先，无法完整解析时才退回首声母。
-- 最终的 `qtopia232_fallbackorder` 包修复 `hef` 误消费 `h`、`nma` 无候选的问题，把兜底顺序明确为首完整音节优先，其次首声母。
+- 后来的 `qtopia232_fallbackorder` 包修复 `hef` 误消费 `h`、`nma` 无候选的问题，把兜底顺序明确为首完整音节优先，其次首声母。
+- 最终的 `qtopia232_tolerantparse` 包把拼音切分改成容错回溯解析：原始预编辑串完整保留，候选栏显示最佳切分，解析失败不再触发自动上屏。
 
 ### 可安装兼容包
 
 已生成的推荐测试包：
 
 ```text
-dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_fallbackorder.ipk
+dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_tolerantparse.ipk
 ```
 
 该包以可安装的 `murphytalk.pinyin_0.03_arm_noshiftzaoci_fwpunct.ipk` 为模板：
@@ -412,7 +420,7 @@ dist/murphytalk.pinyin_1.1.45_arm_jianpin_qtopia232_fallbackorder.ipk
 校验：
 
 ```text
-SHA256: ae73dc016fc3a7425c34051b0a5605e1f0bb59d9b260bba74093960624da1023
+SHA256: 786efc61be428826ed67625285b7cd93f31fbfc564c88f3bcc20f941cac34e99
 ```
 
 ## 验收建议
@@ -439,6 +447,9 @@ SHA256: ae73dc016fc3a7425c34051b0a5605e1f0bb59d9b260bba74093960624da1023
 18. 输入 `cong` 并选“从”，应整体消费 `cong`，不应只消费 `c` 后留下 `ong`。
 19. 输入 `hef`，应先显示 `he` 的单字候选；选“何/和”等候选后，应保留 `f` 而不是留下 `ef`。
 20. 输入 `nma`，应显示 `n` 的单字候选，不应空白。
+21. 输入 `beij`，候选栏应显示类似 `bei j` 的切分，并优先给出 `bei` 相关候选。
+22. 输入 `xian`，应能按完整音节 `xian` 查询，同时保留 `xi an` 方向的短语候选参与合并。
+23. 输入 `nihaoshijie`，应切成 `ni hao shi jie` 方向查询；如果旧词库没有整词，也应能逐段继续输入，不应丢尾巴或自动上屏。
 
 ## 本地验证记录
 
@@ -453,6 +464,47 @@ SHA256: ae73dc016fc3a7425c34051b0a5605e1f0bb59d9b260bba74093960624da1023
   - `nh` 查询键与 `ni hao` 短语键在短语比较器中等价。
   - `zg` 查询键与 `zhong guo` 短语键在短语比较器中等价。
   - 当前旧词库里没有 `nihao` / “你好”短语；混合输入 `n hao` 会走首 token 回退，不会再出现无候选空白。
+
+### 独立 fuzz 测试
+
+新增了不依赖 Qtopia UI 的解析/查词 fuzz harness：
+
+```sh
+make -f tests/Makefile
+./tests/fuzz_pinyin scim/pinyin_table.txt "" 20000 tests/fuzz_regressions.txt
+```
+
+测试程序直接链接 `PinyinEngine.cpp`、`scim/scim_pinyin.cpp`、`phrase/PinyinPhrase.cpp` 和 `public.cpp`，并通过 `tests/stubs/qstring.h` 提供最小 `QString/QChar` stub，因此不需要 Qtopia 窗口系统。
+
+覆盖内容：
+
+- 固定用例：`hef`、`nma`、`xian`、`beij`、`nihaoshijie`、`zhzh`、`ng`、`v`。
+- 随机用例：随机拼接合法音节、任意前缀、声母、单字母和隔音符，长度 1 到 12。
+- 不变量：
+  - `get_raw_pinyin()` 必须与原始输入逐字符一致。
+  - 每个输入要么有候选，要么被测试明确视为待定/不完整。
+  - 解析和查词阶段不触发任何 commit。
+- 固定展示断言：
+  - `hef -> he f`
+  - `nma -> n ma`
+  - `xian -> xian`
+  - `beij -> bei j`
+  - `nihaoshijie -> ni hao shi jie`
+
+违反不变量时，程序会打印输入串、切分显示、候选数、pending 状态和 commit 计数，并把新失败追加到 `tests/fuzz_regressions.txt`。
+
+最近一次验证结果：
+
+```text
+FIXED input=hef display=he f candidates=100 pending=yes
+FIXED input=nma display=n ma candidates=485 pending=no
+FIXED input=xian display=xian candidates=200 pending=no
+FIXED input=beij display=bei j candidates=70 pending=yes
+FIXED input=nihaoshijie display=ni hao shi jie candidates=80 pending=no
+cases=20008 failures=0 new_failures=0 regression_file=tests/fuzz_regressions.txt
+```
+
+连续两轮 fuzz 均为 `failures=0`、`new_failures=0`；最终失败集合为空，`tests/fuzz_regressions.txt` 只保留说明注释。
 
 已做的远端构建验证：
 

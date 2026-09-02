@@ -46,6 +46,12 @@ public:
 	inline String get_display_pinyin(){
 		return m_display_pinyin;
 	}
+	inline String get_raw_pinyin(){
+		return m_raw_pinyin;
+	}
+	inline bool has_pending_pinyin(){
+		return m_has_pending_pinyin;
+	}
 	QChar get_char(unsigned int index);
 	QString get_phrase(unsigned int index);
 	bool is_phrase_candidate(unsigned int index);
@@ -78,6 +84,8 @@ private:
 	unsigned int m_mixed_char_commit_length;
 	unsigned int m_phrase_candidate_count;
 	String      m_display_pinyin;
+	String      m_raw_pinyin;
+	bool        m_has_pending_pinyin;
 	
 	//phrase
        	PinyinPhraseTable               m_phrases_table;

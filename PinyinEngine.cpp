@@ -143,6 +143,163 @@ static bool find_first_initial_chars(PinyinTable &table,CharVector &chars,
 	return table.find_chars_by_initial(chars,initial) > 0;
 }
 
+struct TolerantSegment
+{
+	PinyinKey key;
+	unsigned int start;
+	unsigned int len;
+	bool complete;
+	bool pending;
+};
+
+typedef std::vector<TolerantSegment> TolerantSegmentVector;
+
+struct TolerantSplit
+{
+	TolerantSegmentVector segments;
+	int score;
+};
+
+typedef std::vector<TolerantSplit> TolerantSplitVector;
+
+static bool split_better(const TolerantSplit &lhs,const TolerantSplit &rhs)
+{
+	if(lhs.score != rhs.score)
+		return lhs.score > rhs.score;
+	return lhs.segments.size() < rhs.segments.size();
+}
+
+static bool is_complete_key(const char *pinyin,unsigned int len,PinyinKey &key)
+{
+	int parsed = key.set_key(scim_default_pinyin_validator,pinyin,len);
+	return parsed == (int)len && key.get_final() != SCIM_PINYIN_ZeroFinal;
+}
+
+static bool is_incomplete_piece(const char *pinyin,unsigned int len,PinyinKey &key)
+{
+	if(len == 0 || len > 2)
+		return false;
+
+	char buf[3];
+	memcpy(buf,pinyin,len);
+	buf[len] = 0;
+
+	if(len == 1){
+		PinyinInitial initial = get_initial_from_letter(buf[0]);
+		if(initial == SCIM_PINYIN_ZeroInitial)
+			return false;
+		key = PinyinKey(initial, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone);
+		return true;
+	}
+
+	if(strcmp(buf,"zh") == 0){
+		key = PinyinKey(SCIM_PINYIN_Zhi, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone);
+		return true;
+	}
+	if(strcmp(buf,"ch") == 0){
+		key = PinyinKey(SCIM_PINYIN_Chi, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone);
+		return true;
+	}
+	if(strcmp(buf,"sh") == 0){
+		key = PinyinKey(SCIM_PINYIN_Shi, SCIM_PINYIN_ZeroFinal, SCIM_PINYIN_ZeroTone);
+		return true;
+	}
+
+	return false;
+}
+
+static void collect_tolerant_splits(const char *pinyin,unsigned int pinyin_len,
+				    unsigned int pos,TolerantSegmentVector &current,
+				    int score,TolerantSplitVector &splits)
+{
+	if(splits.size() >= 32)
+		return;
+
+	while(pos < pinyin_len && pinyin[pos] == '\'')
+		pos++;
+
+	if(pos >= pinyin_len){
+		if(current.size() > 0){
+			TolerantSplit split;
+			split.segments = current;
+			split.score = score;
+			splits.push_back(split);
+		}
+		return;
+	}
+
+	if(!isalpha(pinyin[pos]))
+		return;
+
+	unsigned int max_len = SCIM_PINYIN_KEY_MAXLEN;
+	if(pos + max_len > pinyin_len)
+		max_len = pinyin_len - pos;
+
+	for(unsigned int len=max_len;len>0;len--){
+		bool has_separator = false;
+		for(unsigned int i=0;i<len;i++){
+			if(pinyin[pos+i] == '\''){
+				has_separator = true;
+				break;
+			}
+		}
+		if(has_separator)
+			continue;
+
+		PinyinKey key;
+		if(is_complete_key(pinyin+pos,len,key)){
+			TolerantSegment seg;
+			seg.key = key;
+			seg.start = pos;
+			seg.len = len;
+			seg.complete = true;
+			seg.pending = false;
+			current.push_back(seg);
+			collect_tolerant_splits(pinyin,pinyin_len,pos+len,current,score+(int)len*10,splits);
+			current.pop_back();
+		}
+	}
+
+	unsigned int incomplete_max = 2;
+	if(pos + incomplete_max > pinyin_len)
+		incomplete_max = pinyin_len - pos;
+	for(unsigned int len=incomplete_max;len>0;len--){
+		PinyinKey key;
+		if(is_incomplete_piece(pinyin+pos,len,key)){
+			TolerantSegment seg;
+			seg.key = key;
+			seg.start = pos;
+			seg.len = len;
+			seg.complete = false;
+			seg.pending = (pos + len >= pinyin_len);
+			current.push_back(seg);
+			collect_tolerant_splits(pinyin,pinyin_len,pos+len,current,
+						score + (seg.pending ? (int)len*9 : -((int)len*4)),splits);
+			current.pop_back();
+		}
+	}
+}
+
+static void collect_tolerant_splits(const char *pinyin,unsigned int pinyin_len,
+				    TolerantSplitVector &splits)
+{
+	TolerantSegmentVector current;
+	splits.clear();
+	collect_tolerant_splits(pinyin,pinyin_len,0,current,0,splits);
+	std::sort(splits.begin(),splits.end(),split_better);
+}
+
+static String format_tolerant_split(const char *pinyin,const TolerantSplit &split)
+{
+	String result;
+	for(unsigned int i=0;i<split.segments.size();i++){
+		if(i>0)
+			result += " ";
+		result.append(pinyin + split.segments[i].start,split.segments[i].len);
+	}
+	return result;
+}
+
 static void collect_pinyin_splits(const char *pinyin,unsigned int pinyin_len,
 				  unsigned int pos,PinyinKeyVector &current,
 				  std::vector<PinyinKeyVector> &splits)
@@ -245,6 +402,7 @@ PinyinEngine::PinyinEngine(const char *table_file,const char *phrase_index_file)
 	:m_table(NULL,table_file),m_table_filename(table_file),
 	 m_initial_lookup(false),m_partial_lookup(false),m_mixed_candidates(false),
 	 m_commit_pinyin_length(0),m_mixed_char_commit_length(0),m_phrase_candidate_count(0),
+	 m_display_pinyin(""),m_raw_pinyin(""),m_has_pending_pinyin(false),
 	 m_phrases_table(phrase_index_file),m_phrase_idx_filename(phrase_index_file)
 {
 }
@@ -263,12 +421,70 @@ unsigned int PinyinEngine::search(const char* pinyin)
 	m_commit_pinyin_length = pinyin_len;
 	m_mixed_char_commit_length = pinyin_len;
 	m_phrase_candidate_count = 0;
+	m_display_pinyin = pinyin ? pinyin : "";
+	m_raw_pinyin = pinyin ? pinyin : "";
+	m_has_pending_pinyin = false;
 	m_chars.clear();
 	m_phrases.clear();
 
 	if(pinyin_len == 0){
 		m_key.clear_key();
 		return 0;
+	}
+
+	TolerantSplitVector tolerant_splits;
+	collect_tolerant_splits(pinyin,pinyin_len,tolerant_splits);
+	if(tolerant_splits.size() > 0){
+		m_display_pinyin = format_tolerant_split(pinyin,tolerant_splits[0]);
+		m_has_pending_pinyin = tolerant_splits[0].segments.back().pending;
+
+		PhraseOffsetFrequencyPairVector all_pairs;
+		PhraseOffsetFrequencyPairVector pairs;
+		unsigned int split_limit = std::min(static_cast<unsigned int>(tolerant_splits.size()),
+						    static_cast<unsigned int>(4));
+		for(unsigned int i=0;i<split_limit;i++){
+			if(tolerant_splits[i].segments.size() <= 1)
+				continue;
+			PinyinKeyVector keys;
+			for(unsigned int j=0;j<tolerant_splits[i].segments.size();j++)
+				keys.push_back(tolerant_splits[i].segments[j].key);
+			m_key.set_key_vector(keys);
+			if(m_phrases_table.find_phrases(pairs,m_key) > 0)
+				append_unique_phrases(all_pairs,pairs);
+		}
+
+		if(all_pairs.size() > 0){
+			m_offset_freq_pairs = all_pairs;
+			m_phrases_table.get_phrases_by_offsets(m_offset_freq_pairs,m_phrases);
+			m_phrase_candidate_count = m_phrases.size();
+		}
+
+		const TolerantSegment &first = tolerant_splits[0].segments[0];
+		if(first.complete){
+			m_table.find_chars(m_chars,first.key);
+			char first_pinyin[SCIM_PINYIN_KEY_MAXLEN+1];
+			memcpy(first_pinyin,pinyin+first.start,first.len);
+			first_pinyin[first.len]=0;
+			m_key.set_key(first_pinyin);
+		}
+		else{
+			m_table.find_chars_by_initial(m_chars,first.key.get_initial());
+			m_key.clear_key();
+		}
+
+		m_initial_lookup = (m_phrase_candidate_count == 0 && !first.complete);
+		m_mixed_candidates = m_phrase_candidate_count > 0;
+		m_mixed_char_commit_length = first.start + first.len;
+		while(m_mixed_char_commit_length < pinyin_len &&
+		      pinyin[m_mixed_char_commit_length] == '\'')
+			m_mixed_char_commit_length++;
+		m_commit_pinyin_length = (m_phrase_candidate_count > 0) ? pinyin_len : m_mixed_char_commit_length;
+
+		if(m_phrase_candidate_count + m_chars.size() > 0)
+			return m_phrase_candidate_count + m_chars.size();
+	}
+	else{
+		m_has_pending_pinyin = pinyin_len > 0;
 	}
 
 	if(pinyin_len == 1){
@@ -460,6 +676,8 @@ unsigned int PinyinEngine::search(const char* pinyin)
 		}
 		return char_count;
 	}
+
+	return 0;
 }
 
 QChar PinyinEngine::get_char(unsigned int index)
@@ -487,7 +705,7 @@ bool PinyinEngine::is_phrase_candidate(unsigned int index)
 
 unsigned int PinyinEngine::get_commit_pinyin_length(unsigned int index)
 {
-	if(m_mixed_candidates && index >= m_phrase_candidate_count)
+	if(index >= m_phrase_candidate_count)
 		return m_mixed_char_commit_length;
 	return m_commit_pinyin_length;
 }
